@@ -1,0 +1,1445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>You Changed Your Mind, The Model Didn't</title>
+<meta name="description" content="Intent-Eval and Intent-OPSD: language models keep acting on what was said in a conversation, even after the user rejected or replaced it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap">
+<style>
+/* Layout: editorial single column (~70rem) on white; serif for statements, sans for everything else.
+   Condition colors follow the paper (Original blue, Retained red, Revised green); domain colors follow Figure 2;
+   the method stage follows Figure 3's three panels; the depth chart uses Figure 5's palette. */
+:root{
+  --bg:#ffffff; --panel:#f6f7f9; --panel-2:#eceef2; --ink:#0e1116; --ink-2:#4a505c; --muted:#868c98; --line:#e7e9ee; --line-2:#d3d7de;
+  --accent:#2655a5; --red:#d6453d; --red-ink:#b3261e; --red-soft:#fdeceb; --green:#5b8a25; --green-ink:#4a7419; --green-soft:#eef4e3;
+  --orange:#ec8b3c; --orange-ink:#b0560f; --orange-soft:#fef1e5; --gray:#c6cad2; --neu:#7f8796; --neu-ink:#565e6c;
+  --u-user:#eaf0fc; --u-user-bd:#c7d5f1; --u-model:#ffffff; --u-model-bd:#e0e3e9;
+  --act:#d8ad59; --act-bg:#f8eed5; --act-ink:#8a6114; --code:#67adbe; --code-bg:#dfeef3; --code-ink:#1f6d86;
+  --db:#80ab8c; --db-bg:#e5eee5; --db-ink:#2f6b48; --math:#c38aa6; --math-bg:#f2e3ea; --math-ink:#8a3d63;
+  --p5-neu:#0072b2; --p5-ret:#d55e00; --p5-rn:#cc79a7; --p5-vn:#009e73;
+  --m-base:#c6cad2; --m-sft:#d6b07a; --m-opsd:#2655a5;
+  --o-src-h:#e7e1f5; --o-src-b:#f8f6fc; --o-src-bd:#cec4e9; --o-src-ink:#574687;
+  --o-stu-h:#f9e5c9; --o-stu-b:#fdf8f1; --o-stu-bd:#e8cc9e; --o-stu-ink:#9a5a0c; --o-stu-box:#fbefdd; --o-ps:#c69a4c;
+  --o-tea-h:#d9e7f3; --o-tea-b:#f3f8fb; --o-tea-bd:#a9c3db; --o-tea-ink:#2d5d8c; --o-tea-box:#e6f0f8; --o-pt:#5f87b0;
+  --o-obj-bd:#e2a0a0; --o-obj-b:#fdf4f4; --o-obj-ink:#b04747; --o-obj-box:#fbe4e4; --o-brown:#a8782c;
+  --plate:#ffffff;
+  --serif:"Newsreader","Iowan Old Style",Georgia,serif;
+  --sans:"Geist","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --gutter:clamp(16px,4vw,40px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b0d11; --panel:#14171d; --panel-2:#1c2028; --ink:#eceef2; --ink-2:#b3b8c3; --muted:#7c828e; --line:#22262e; --line-2:#323743;
+    --accent:#8fb0ff; --red:#ff6e62; --red-ink:#ff8f86; --red-soft:#3a1d1c; --green:#a3c76a; --green-ink:#b8d98a; --green-soft:#1f2a14;
+    --orange:#f2a061; --orange-ink:#f6b27e; --orange-soft:#33261a; --gray:#3c414c; --neu:#98a0ad; --neu-ink:#b7bdc8;
+    --u-user:#18213a; --u-user-bd:#2c3b62; --u-model:#171a21; --u-model-bd:#2a2f39;
+    --act:#d8ad59; --act-bg:#2a2416; --act-ink:#e8c47c; --code:#67adbe; --code-bg:#14252b; --code-ink:#8fd0e2;
+    --db:#80ab8c; --db-bg:#16231a; --db-ink:#a6d4b2; --math:#c38aa6; --math-bg:#291b22; --math-ink:#e2a9c4;
+    --p5-neu:#56b4e9; --p5-ret:#ff8c3a; --p5-rn:#e39ac4; --p5-vn:#2fc49a;
+    --m-base:#4a505c; --m-sft:#b58e57; --m-opsd:#8fb0ff;
+    --o-src-h:#2a2540; --o-src-b:#17151f; --o-src-bd:#4c4373; --o-src-ink:#cbbff2;
+    --o-stu-h:#3a2c17; --o-stu-b:#1c1712; --o-stu-bd:#6b5330; --o-stu-ink:#f2b86c; --o-stu-box:#2a2114; --o-ps:#d8ad66;
+    --o-tea-h:#1c2b3b; --o-tea-b:#121a22; --o-tea-bd:#3d5976; --o-tea-ink:#9cc3ea; --o-tea-box:#192634; --o-pt:#86a9cf;
+    --o-obj-bd:#7d4646; --o-obj-b:#1f1415; --o-obj-ink:#f0a0a0; --o-obj-box:#371e20; --o-brown:#d9a85a;
+    --plate:#f2f3f6;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b0d11; --panel:#14171d; --panel-2:#1c2028; --ink:#eceef2; --ink-2:#b3b8c3; --muted:#7c828e; --line:#22262e; --line-2:#323743;
+  --accent:#8fb0ff; --red:#ff6e62; --red-ink:#ff8f86; --red-soft:#3a1d1c; --green:#a3c76a; --green-ink:#b8d98a; --green-soft:#1f2a14;
+  --orange:#f2a061; --orange-ink:#f6b27e; --orange-soft:#33261a; --gray:#3c414c; --neu:#98a0ad; --neu-ink:#b7bdc8;
+  --u-user:#18213a; --u-user-bd:#2c3b62; --u-model:#171a21; --u-model-bd:#2a2f39;
+  --act:#d8ad59; --act-bg:#2a2416; --act-ink:#e8c47c; --code:#67adbe; --code-bg:#14252b; --code-ink:#8fd0e2;
+  --db:#80ab8c; --db-bg:#16231a; --db-ink:#a6d4b2; --math:#c38aa6; --math-bg:#291b22; --math-ink:#e2a9c4;
+  --p5-neu:#56b4e9; --p5-ret:#ff8c3a; --p5-rn:#e39ac4; --p5-vn:#2fc49a;
+  --m-base:#4a505c; --m-sft:#b58e57; --m-opsd:#8fb0ff;
+  --o-src-h:#2a2540; --o-src-b:#17151f; --o-src-bd:#4c4373; --o-src-ink:#cbbff2;
+  --o-stu-h:#3a2c17; --o-stu-b:#1c1712; --o-stu-bd:#6b5330; --o-stu-ink:#f2b86c; --o-stu-box:#2a2114; --o-ps:#d8ad66;
+  --o-tea-h:#1c2b3b; --o-tea-b:#121a22; --o-tea-bd:#3d5976; --o-tea-ink:#9cc3ea; --o-tea-box:#192634; --o-pt:#86a9cf;
+  --o-obj-bd:#7d4646; --o-obj-b:#1f1415; --o-obj-ink:#f0a0a0; --o-obj-box:#371e20; --o-brown:#d9a85a;
+  --plate:#f2f3f6;
+  color-scheme:dark;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+html{scroll-behavior:smooth;scroll-padding-top:4.5rem}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:1.0625rem;line-height:1.6;padding-inline:var(--gutter);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.wrap{max-width:70rem;margin-inline:auto}
+a{color:inherit}
+p{margin:0}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none;background:var(--neu)}
+.dot.orig{background:var(--accent)} .dot.neu{background:var(--neu)} .dot.ret{background:var(--red)} .dot.rev{background:var(--green)}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;margin-inline:calc(-1 * var(--gutter));padding-inline:var(--gutter);background:color-mix(in oklab,var(--bg) 90%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.nav .wrap{display:flex;align-items:center;gap:1.5rem;height:3.5rem;border-bottom:1px solid var(--line)}
+.brand{font-weight:600;font-size:.95rem;text-decoration:none;white-space:nowrap}
+.nav nav{display:flex;gap:1.4rem;margin-left:auto;overflow-x:auto;scrollbar-width:none;min-width:0}
+.nav nav::-webkit-scrollbar{display:none}
+.nav nav a{font-size:.88rem;color:var(--ink-2);text-decoration:none;white-space:nowrap}
+.nav nav a:hover{color:var(--ink)}
+
+/* type */
+h1,h2,.big{font-family:var(--serif);font-weight:400;letter-spacing:-.02em}
+h1{font-size:clamp(2.7rem,5.6vw,4.7rem);line-height:1;margin:1.25rem 0 0;text-wrap:balance}
+h1 em{font-style:italic;color:var(--red)}
+h2{font-size:clamp(2rem,3.8vw,3rem);line-height:1.06;margin:.6rem 0 0;text-wrap:balance}
+h3{font-family:var(--sans);font-weight:500;font-size:1.2rem;line-height:1.35;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.kicker,.label{font-size:.88rem;color:var(--muted)}
+.subtitle{font-family:var(--serif);font-style:italic;font-size:1.35rem;color:var(--ink-2);margin-top:.9rem}
+.lead{font-size:1.15rem;line-height:1.5;color:var(--ink-2);max-width:36ch;margin-top:1.25rem}
+.sub{font-size:1.06rem;color:var(--ink-2);max-width:58ch;margin-top:1rem}
+.note{font-size:.9rem;color:var(--muted);line-height:1.55}
+sub{font-size:.7em}
+
+/* buttons */
+.links{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:2rem}
+.btn{display:inline-flex;align-items:center;gap:.45rem;font-size:.9rem;font-weight:500;line-height:1;padding:.62rem 1rem;border-radius:999px;border:1px solid var(--line-2);background:var(--bg);text-decoration:none;cursor:pointer;transition:border-color .2s}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.soon{color:var(--muted);cursor:default}
+.btn.soon:hover{border-color:var(--line-2)}
+.btn small{font-size:.72rem;color:var(--muted)}
+.icon-btn{display:inline-grid;place-items:center;width:2.25rem;height:2.25rem;border-radius:50%;border:1px solid var(--line-2);background:var(--bg);cursor:pointer;color:var(--ink-2);transition:border-color .2s,color .2s;flex:none}
+.icon-btn:hover{border-color:var(--ink-2);color:var(--ink)}
+.icon-btn svg{width:14px;height:14px}
+.icon-btn.solid{background:var(--ink);color:var(--bg);border-color:var(--ink);width:2.6rem;height:2.6rem}
+.pills{display:flex;flex-wrap:wrap;gap:.25rem}
+.pills button{display:inline-flex;align-items:center;gap:.45rem;border:1px solid transparent;background:transparent;padding:.38rem .8rem;border-radius:999px;font-size:.86rem;color:var(--ink-2);cursor:pointer}
+.pills button:hover{color:var(--ink)}
+.pills button[aria-pressed="true"]{background:var(--bg);color:var(--ink);border-color:var(--line-2)}
+.pills.on-panel button[aria-pressed="true"]{background:var(--bg)}
+
+/* sections */
+section.block{padding-block:clamp(4rem,9vw,7rem);border-top:1px solid var(--line)}
+.sec{margin-bottom:clamp(2rem,4vw,3rem)}
+.panel{position:relative;background:var(--panel);border-radius:22px;padding:clamp(1rem,2.5vw,1.5rem);min-width:0}
+details.fig{margin-top:1.75rem}
+details summary{font-size:.92rem;color:var(--ink-2);cursor:pointer;width:fit-content}
+details summary:hover{color:var(--ink)}
+.plate{background:var(--plate);border-radius:16px;padding:clamp(.5rem,2vw,1.25rem);margin-top:1rem}
+.plate img{display:block;width:100%;height:auto}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:clamp(2.5rem,6vw,5rem);align-items:center;padding-block:clamp(3.5rem,9vw,7rem) clamp(4rem,9vw,7rem)}
+
+.hero-video{margin:0;min-width:0}
+.hero-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:20px;background:#0b0d11;box-shadow:0 1px 2px rgba(14,17,22,.08),0 28px 56px -28px rgba(14,17,22,.45)}
+.hero-video figcaption{font-size:.84rem;color:var(--muted);margin-top:.8rem}
+/* chat */
+.chat-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.1rem}
+.chat-head .label{display:inline-flex;align-items:center;gap:.5rem;color:var(--ink-2)}
+.chat{display:flex;flex-direction:column;gap:.7rem;position:relative}
+.msg{display:flex;align-items:flex-end;gap:.55rem;max-width:92%;min-width:0;transition:opacity .5s var(--ease),transform .5s var(--ease)}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg.model{align-self:flex-start}
+.msg .body{display:flex;flex-direction:column;align-items:flex-start;min-width:0}
+.msg.user .body{align-items:flex-end}
+.ava{width:30px;height:30px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px var(--line-2);padding:1px;flex:none;object-fit:contain}
+.msg.cont .ava{visibility:hidden}
+.bubble{position:relative;font-size:.95rem;line-height:1.45;padding:.55rem .85rem;border-radius:16px;overflow-wrap:anywhere}
+.user .bubble{background:var(--u-user);border:1px solid var(--u-user-bd);border-bottom-right-radius:6px}
+.model .bubble{background:var(--u-model);border:1px solid var(--u-model-bd);border-bottom-left-radius:6px}
+.model .bubble.bad{border-color:color-mix(in oklab,var(--red) 55%,var(--u-model-bd))}
+.model .bubble.good{border-color:color-mix(in oklab,var(--green) 55%,var(--u-model-bd))}
+.tag{display:inline-block;margin-left:.5rem;font-size:.74rem;font-weight:500;line-height:1;padding:.28rem .55rem;border-radius:999px;vertical-align:1px;white-space:nowrap}
+.tag.prop{background:var(--orange-soft);color:var(--orange-ink)}
+.tag.rej{background:var(--red-soft);color:var(--red-ink)}
+.tag.acc{background:var(--green-soft);color:var(--green-ink)}
+.verdict{display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:var(--ink-2);margin:.4rem .25rem 0;transition:opacity .4s}
+.verdict i{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;font-style:normal;font-size:.62rem;font-weight:700;color:#fff;flex:none}
+.verdict i.x{background:var(--red)} .verdict i.ok{background:var(--green)}
+.dots{display:none;gap:4px;padding:.35rem .1rem}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.1s infinite ease-in-out}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.msg.typing .content{display:none}
+.msg.typing .dots{display:inline-flex}
+.msg.typing .verdict{display:none}
+.pv{position:relative;white-space:nowrap;font-weight:600}
+.pv::after{content:"";position:absolute;left:-2px;right:-2px;top:55%;height:2px;border-radius:2px;background:var(--red);transform:scaleX(0);transform-origin:left center;transition:transform .55s cubic-bezier(.65,0,.35,1)}
+.strike .pv::after,.pv.strike::after{transform:scaleX(1)}
+.accepted .pv{box-shadow:inset 0 -2px 0 var(--green)}
+.leak{color:var(--red-ink);font-weight:600;box-shadow:inset 0 -2px 0 var(--red);transition:opacity .3s}
+.stamp{position:absolute;right:-10px;top:-12px;width:24px;height:24px;transition:opacity .3s,transform .4s var(--ease)}
+.stamp path{stroke:var(--red)}
+.ghost{position:absolute;left:0;top:0;z-index:5;font-weight:600;font-size:.95rem;line-height:1.45;color:var(--red-ink);background:var(--bg);border:1px solid var(--red);border-radius:6px;padding:0 .35rem;pointer-events:none;will-change:transform}
+.playing .seq:not(.in),.playing > .msg:not(.in),.playing .event > .msg:not(.in){opacity:0;transform:translateY(8px)}
+.playing .stamp:not(.in){opacity:0;transform:scale(1.4)}
+.playing .leak:not(.in){opacity:0}
+.playing .event:not(.in){border-color:transparent}
+.playing .event:not(.in) .ev-label,.playing .insert-pt:not(.in){opacity:0}
+
+/* setup */
+.setup{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:clamp(1.5rem,4vw,3.5rem);align-items:start}
+.event{--ev:var(--neu);border-left:2px solid var(--ev);padding:.3rem 0 .3rem .9rem;display:flex;flex-direction:column;gap:.7rem;transition:border-color .4s}
+.event.ret{--ev:var(--red)} .event.rev{--ev:var(--green)}
+.ev-label{display:flex;align-items:center;gap:.45rem;font-size:.8rem;color:var(--muted);transition:opacity .4s}
+.insert-pt{display:flex;align-items:center;justify-content:center;gap:.5rem;font-size:.82rem;color:var(--orange-ink);border:1px dashed var(--orange);border-radius:12px;padding:.45rem;transition:opacity .4s}
+.readout{display:flex;flex-direction:column;gap:2rem;padding-top:.5rem}
+.ro .label{display:block}
+.ro .big{display:block;font-size:clamp(3rem,6vw,4.25rem);line-height:1;margin-top:.35rem;font-variant-numeric:tabular-nums;transition:color .3s}
+.ro .big .old{color:var(--muted);text-decoration:line-through;text-decoration-thickness:2px;font-size:.6em;margin-right:.4rem}
+.ro .big.changed{color:var(--green-ink)}
+.ro .hint{display:block;font-size:.9rem;color:var(--ink-2);margin-top:.5rem;min-height:1.4em}
+.ro .hint .p{color:var(--orange-ink)} .ro .hint .r{color:var(--red-ink)} .ro .hint .a{color:var(--green-ink)}
+.ro.flash .big{animation:fl .8s ease}
+@keyframes fl{0%{opacity:.25}100%{opacity:1}}
+.model-line{display:flex;align-items:center;gap:.5rem;font-size:.95rem;padding-top:1rem;border-top:1px solid var(--line);min-height:2.6rem}
+.model-line img{width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px var(--line-2)}
+.model-line .bad{color:var(--red-ink)} .model-line .good{color:var(--green-ink)}
+
+/* reveal-on-view transitions */
+.bar{transform-box:fill-box;transform-origin:0 50%;transition:transform 1s var(--ease) var(--d,0ms)}
+.bar.rtl{transform-origin:100% 50%}
+.bar.up{transform-origin:50% 100%}
+.pre .bar{transform:scaleX(0)}
+.pre .bar.up{transform:scaleY(0)}
+.draw{stroke-dasharray:1;stroke-dashoffset:0;transition:stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1) var(--d,0ms)}
+.pre .draw{stroke-dashoffset:1}
+.fade{transition:opacity .6s ease var(--d,0ms)}
+.pre .fade{opacity:0}
+
+/* eval figure (Figure 2) */
+.evalfig{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1rem}
+.ef-card{background:var(--panel);border-radius:22px;padding:1.25rem 1.25rem 1.1rem;min-width:0}
+.ef-h{display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
+.ef-h h3{font-family:var(--serif);font-weight:400;font-size:1.35rem;letter-spacing:-.01em}
+.ef-h span{font-size:.84rem;color:var(--muted)}
+.ef-right{display:grid;gap:1rem;min-width:0}
+.quad{position:relative;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;min-height:430px}
+.q{--c:var(--act);--cb:var(--act-bg);--ci:var(--act-ink);background:var(--cb);border-radius:16px;padding:1rem 1.1rem;display:flex;flex-direction:column;gap:.1rem;transition:opacity .3s;min-width:0}
+.q.code{--c:var(--code);--cb:var(--code-bg);--ci:var(--code-ink);align-items:flex-end;text-align:right}
+.q.math{--c:var(--math);--cb:var(--math-bg);--ci:var(--math-ink);justify-content:flex-end}
+.q.db{--c:var(--db);--cb:var(--db-bg);--ci:var(--db-ink);align-items:flex-end;text-align:right;justify-content:flex-end}
+.q .qi{width:28px;height:28px;background:var(--ci);-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat;margin-bottom:.55rem}
+.q b{font-family:var(--serif);font-weight:500;font-size:1.65rem;letter-spacing:-.015em;color:var(--ci);line-height:1.05}
+.q .src{font-size:.82rem;color:var(--ink-2);margin-top:.3rem;letter-spacing:.01em}
+.q .cnt{display:flex;align-items:baseline;gap:.3rem;margin-top:.35rem;font-size:.78rem;color:var(--muted)}
+.q .cnt strong{font-family:var(--serif);font-weight:400;font-size:1.35rem;color:var(--ink);font-variant-numeric:tabular-nums}
+.q.code .cnt,.q.db .cnt{justify-content:flex-end}
+.q .tags{display:flex;flex-direction:column;gap:5px;margin-top:.75rem;align-items:flex-start}
+.q.code .tags,.q.db .tags{align-items:flex-end}
+.q .tags em{font-style:normal;font-size:.72rem;font-weight:500;letter-spacing:.01em;color:var(--ci);background:color-mix(in oklab,var(--bg) 55%,transparent);border:1px solid color-mix(in oklab,var(--c) 60%,transparent);padding:.16rem .6rem;border-radius:999px;white-space:nowrap}
+.q.math .tags,.q.db .tags{order:-1;margin:0 0 .6rem}
+.ring{position:absolute;left:50%;top:50%;width:230px;height:230px;transform:translate(-50%,-50%);pointer-events:none}
+.ring svg{width:100%;height:100%;overflow:visible}
+.ring .wedge{transition:opacity .3s}
+.ring .arc{fill:none;stroke-width:9;stroke-linecap:round}
+.ring .ri{position:absolute;width:30px;height:30px;background:var(--ci);-webkit-mask:var(--icon) center/contain no-repeat;mask:var(--icon) center/contain no-repeat;transform:translate(-50%,-50%)}
+.ring .rc{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:92px;height:92px;border-radius:50%;background:var(--bg);box-shadow:0 0 0 1px var(--line-2);display:grid;place-content:center;text-align:center;line-height:1.2}
+.ring .rc b{font-family:var(--serif);font-size:1.02rem;font-weight:500;letter-spacing:-.01em}
+.ring .rc span{font-size:.7rem;color:var(--muted);margin-top:.1rem}
+.evalfig[data-hl] .q:not([data-d="x"]){opacity:.5}
+.evalfig[data-hl="act"] .q.act,.evalfig[data-hl="code"] .q.code,.evalfig[data-hl="db"] .q.db,.evalfig[data-hl="math"] .q.math{opacity:1}
+.evalfig[data-hl] [data-dd]{opacity:.35;transition:opacity .3s}
+.evalfig[data-hl="act"] [data-dd="act"],.evalfig[data-hl="code"] [data-dd="code"],.evalfig[data-hl="db"] [data-dd="db"],.evalfig[data-hl="math"] [data-dd="math"]{opacity:1}
+.hrow{display:grid;grid-template-columns:5.5rem minmax(0,1fr) 2.6rem;align-items:center;gap:.7rem;font-size:.9rem;padding-block:.28rem;transition:opacity .3s}
+.hrow b{font-weight:500}
+.hrow .tr{height:14px;position:relative}
+.hrow .tr i{position:absolute;inset:0 auto 0 0;border-radius:0 4px 4px 0;transform-origin:left;transition:transform 1s var(--ease) var(--d,0ms)}
+.pre .hrow .tr i{transform:scaleX(0)}
+.hrow .v{font-family:var(--mono);font-size:.84rem;text-align:right}
+.haxis{display:grid;grid-template-columns:5.5rem minmax(0,1fr) 2.6rem;gap:.7rem;font-family:var(--mono);font-size:.7rem;color:var(--muted);margin-top:.3rem}
+.haxis div{display:flex;justify-content:space-between}
+.chipnote{font-size:.78rem;color:var(--ink-2);background:var(--bg);border-radius:999px;padding:.2rem .65rem;box-shadow:0 0 0 1px var(--line-2)}
+.steps4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1.25rem;margin-top:2.25rem;padding-top:1.5rem;border-top:1px solid var(--line)}
+.steps4 div{min-width:0}
+.steps4 .rn{font-family:var(--serif);font-size:1.4rem;color:var(--muted);line-height:1}
+.steps4 b{display:block;font-weight:500;margin-top:.4rem}
+.steps4 p{font-size:.88rem;color:var(--ink-2);margin-top:.25rem}
+
+/* findings */
+.finding{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:clamp(1.5rem,5vw,4.5rem);align-items:start;padding-block:clamp(2.5rem,5vw,3.5rem);border-top:1px solid var(--line)}
+.sec + .finding{border-top:0;padding-top:0}
+.finding h3{margin-bottom:1.25rem}
+.stack{display:flex;flex-direction:column;gap:.9rem;margin-bottom:1.25rem}
+.statrow{display:flex;align-items:baseline;gap:.8rem}
+.statrow .big{font-size:clamp(2.2rem,4vw,3rem);line-height:1;font-variant-numeric:tabular-nums;min-width:5.6ch}
+.statrow .k{font-size:.92rem;color:var(--ink-2);display:flex;align-items:center;gap:.45rem}
+.c-neu{color:var(--neu-ink)} .c-rev{color:var(--green-ink)} .c-ret{color:var(--red-ink)} .c-orig{color:var(--accent)}
+.chart{width:100%;position:relative;min-height:120px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+svg .tick{font:400 11px var(--mono);fill:var(--muted)}
+svg .lbl{font:400 14px var(--sans);fill:var(--ink)}
+svg .lbl2{font:500 13px var(--sans);fill:var(--ink)}
+svg .val{font:400 13px var(--mono);fill:var(--ink-2)}
+svg .hdr{font:400 14px var(--serif);font-style:italic;fill:var(--ink)}
+svg .hdrv{font:500 13px var(--mono);fill:var(--ink-2)}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .axis{stroke:var(--ink-2);stroke-width:1}
+svg .refline{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 4}
+svg .cross{stroke:var(--line-2);stroke-width:1}
+svg .hit{fill:transparent}
+.f-gray{fill:var(--gray)} .f-orig{fill:var(--accent)} .f-neu{fill:var(--neu)} .f-ret{fill:var(--red)} .f-rev{fill:var(--green)}
+.t-neu{fill:var(--neu-ink)} .t-ret{fill:var(--red-ink)} .t-rev{fill:var(--green-ink)}
+.ex2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:1.5rem}
+.excard{border-radius:16px;background:var(--panel);padding:.9rem 1rem;font-size:.9rem;min-width:0}
+.excard .h{display:flex;align-items:center;gap:.45rem;font-size:.8rem;color:var(--muted);margin-bottom:.4rem}
+.excard p{color:var(--ink-2);line-height:1.5}
+.excard s{text-decoration-thickness:2px}
+.excard .ans{margin-top:.4rem;color:var(--ink)}
+.legend5{display:flex;flex-wrap:wrap;gap:.35rem 1.2rem;font-size:.84rem;color:var(--ink-2);margin-bottom:.75rem}
+.legend5 span{display:inline-flex;align-items:center;gap:.4rem}
+.legend5 svg{width:26px;height:12px;flex:none}
+
+/* method stage (Figure 3) */
+.stage{background:var(--panel);border-radius:24px;padding:clamp(1rem,2.5vw,1.6rem)}
+.stage-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.75rem 1rem;margin-bottom:1rem}
+.steps{display:flex;flex-wrap:wrap;gap:4px}
+.steps button{display:inline-flex;align-items:center;gap:.4rem;border:1px solid var(--line-2);background:var(--bg);border-radius:999px;padding:.32rem .75rem .32rem .38rem;font-size:.82rem;color:var(--ink-2);cursor:pointer;transition:all .25s}
+.steps button b{display:inline-grid;place-items:center;width:1.25rem;height:1.25rem;border-radius:50%;background:var(--panel-2);font-family:var(--mono);font-size:.7rem;font-weight:500}
+.steps button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.steps button[aria-pressed="true"] b{background:var(--ink);color:var(--bg)}
+.vsel{display:flex;align-items:center;gap:.5rem;font-size:.84rem;color:var(--muted)}
+.vsel i{font-family:var(--serif);font-size:1.05rem;color:var(--ink)}
+.stage-scroll{overflow-x:auto;border-radius:16px;background:var(--bg)}
+#opsd{display:block;width:100%;min-width:860px;height:auto}
+.swipe{display:none;font-size:.8rem;color:var(--muted);margin:.5rem 0 0}
+.cap{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem 2rem;margin-top:1.25rem;flex-wrap:wrap}
+.cap .txt{flex:1 1 26rem;min-width:0}
+.cap h4{font-family:var(--serif);font-weight:400;font-size:1.45rem;line-height:1.15;margin:0}
+.cap p{font-size:1rem;color:var(--ink-2);margin-top:.45rem;max-width:62ch;min-height:3.2em}
+.cap .ctrl{display:flex;align-items:center;gap:.5rem}
+.pn{stroke-width:1.4}
+.pn.src{fill:var(--o-src-b);stroke:var(--o-src-bd)} .pnh.src{fill:var(--o-src-h)}
+.pn.stu{fill:var(--o-stu-b);stroke:var(--o-stu-bd)} .pnh.stu{fill:var(--o-stu-h)}
+.pn.tea{fill:var(--o-tea-b);stroke:var(--o-tea-bd)} .pnh.tea{fill:var(--o-tea-h)}
+.pn.obj{fill:var(--o-obj-b);stroke:var(--o-obj-bd);stroke-dasharray:6 5}
+.bx{stroke-width:1.2}
+.bx.src{fill:var(--bg);stroke:var(--o-src-bd)}
+.bx.stu{fill:var(--o-stu-box);stroke:var(--o-stu-bd)}
+.bx.tea{fill:var(--o-tea-box);stroke:var(--o-tea-bd)}
+.bx.obj{fill:var(--o-obj-box);stroke:var(--o-obj-bd)}
+.mrow{fill:transparent;transition:fill .35s}
+.mrow.on{fill:color-mix(in oklab,var(--o-src-bd) 45%,transparent)}
+.pt{font:600 18px var(--sans)}
+.pt .ps{font-weight:400;font-style:italic}
+.k-src{fill:var(--o-src-ink)} .k-stu{fill:var(--o-stu-ink)} .k-tea{fill:var(--o-tea-ink)} .k-obj{fill:var(--o-obj-ink)} .k-brown{fill:var(--o-brown)}
+.o-h{font:500 14px var(--sans);fill:var(--ink)}
+.o-s{font:400 12.5px var(--sans);fill:var(--ink-2)}
+.o-l{font:400 12px var(--sans);fill:var(--muted)}
+.o-m{font:italic 400 16px var(--serif);fill:var(--ink)}
+.o-tok{font:500 14px var(--mono);fill:var(--ink)}
+.o-tok .hot{fill:var(--red)} .o-tok .okv{fill:var(--green)}
+.o-P{font:italic 500 22px var(--serif)}
+.o-mini{font:500 10.5px var(--mono);fill:var(--muted)}
+.o-word{font:italic 500 22px var(--serif);fill:var(--o-obj-ink)}
+.ic-src{color:var(--o-src-ink)} .ic-stu{color:var(--o-stu-ink)} .ic-tea{color:var(--o-tea-ink)} .ic-obj{color:var(--o-obj-ink)} .ic-fire{color:#e8792b} .ic-snow{color:#3f86c7} .ic-ok{color:var(--green)}
+.chip-ok{fill:var(--green-soft);stroke:color-mix(in oklab,var(--green) 45%,transparent)}
+.t-ok{font:500 12.5px var(--sans);fill:var(--green-ink)}
+.ar{fill:none;stroke:var(--muted);stroke-width:1.4}
+.ar2{fill:none;stroke:var(--o-src-bd);stroke-width:2}
+.dash2{fill:none;stroke:var(--muted);stroke-width:1.4;stroke-dasharray:5 4}
+.arb{fill:none;stroke:var(--o-brown);stroke-width:2.6}
+.dashp{fill:none;stroke:var(--o-obj-ink);stroke-width:1.4;stroke-dasharray:4 4}
+.flow{animation:flow .9s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-16}}
+.bigar{fill:color-mix(in oklab,var(--o-src-bd) 70%,var(--bg))}
+.ah{fill:var(--muted)} .ahB{fill:var(--o-brown)} .ahP{fill:var(--o-obj-ink)} .ahS{fill:var(--o-src-bd)}
+.bS{fill:var(--o-ps)} .bT{fill:var(--o-pt)}
+.cdot{fill:var(--bg);stroke:var(--line-2);stroke-width:1.4;transition:fill .3s,stroke .3s}
+.part{transition:opacity .4s ease}
+#opsd.focus .part:not(.on){opacity:.25}
+.hid{opacity:0 !important}
+.tok{stroke:var(--bg);stroke-width:2.5}
+.k-blue{fill:var(--accent)} .k-green{fill:var(--green)} .k-red{fill:var(--red)} .k-neu{fill:var(--neu)} .k-sand{fill:var(--o-ps)} .k-steel{fill:var(--o-pt)} .k-lav{fill:var(--o-src-ink)} .k-pink{fill:var(--o-obj-ink)}
+.bump{transform-box:fill-box;transform-origin:center;animation:bump .5s ease}
+@keyframes bump{50%{transform:scale(1.05)}}
+.appear{transform-box:fill-box;transform-origin:center;animation:appear .45s var(--ease) both}
+@keyframes appear{from{opacity:0;transform:scale(.7)}}
+.pulse{transform-box:fill-box;transform-origin:center;animation:pls .7s ease 2}
+@keyframes pls{50%{transform:scale(1.3)}}
+.frost{animation:frost 1.1s ease 2}
+@keyframes frost{50%{opacity:.3}}
+
+/* rq4 */
+.rq4{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,7fr);gap:clamp(1.5rem,5vw,4rem);align-items:start;margin-top:clamp(2.5rem,5vw,3.5rem)}
+.rq4 .statrow .big{color:var(--m-opsd)}
+.legend3{display:flex;flex-wrap:wrap;gap:.35rem 1.2rem;font-size:.84rem;color:var(--ink-2);margin-bottom:.75rem}
+.legend3 span{display:inline-flex;align-items:center;gap:.4rem}
+.legend3 i{width:10px;height:10px;border-radius:2px}
+.f-base{fill:var(--m-base)} .f-sft{fill:var(--m-sft)} .f-opsd{fill:var(--m-opsd)}
+
+/* tables */
+.t2wrap{margin-top:clamp(2.5rem,5vw,3.5rem)}
+#heat2{min-width:940px}
+.table-scroll{overflow-x:auto}
+table.heat{border-collapse:collapse;width:100%;min-width:780px;font-size:.86rem;font-variant-numeric:tabular-nums}
+table.heat th,table.heat td{padding:.48rem .55rem;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+table.heat th{font-weight:500;color:var(--ink-2);font-size:.8rem}
+table.heat thead tr.top th{color:var(--ink);font-weight:500;text-align:center;border-bottom:1px solid var(--line-2);padding-bottom:.35rem}
+table.heat td.m{text-align:left;vertical-align:top;font-weight:500}
+table.heat td.d{text-align:left;color:var(--ink-2)}
+table.heat td.cell{font-family:var(--mono);font-size:.8rem}
+table.heat .split{border-left:1px solid var(--line-2)}
+table.heat tr.grp-end td{border-bottom-color:var(--line-2)}
+table.heat tr.sum td{font-weight:600;border-top:1px solid var(--ink-2)}
+table.heat tr.sum2 td{font-weight:600}
+table.heat td.span{text-align:center}
+.tnote{font-size:.84rem;color:var(--muted);margin-top:.9rem;max-width:80ch}
+
+/* cite */
+.bib{position:relative}
+.bib pre{margin:0;font-family:var(--mono);font-size:.8rem;line-height:1.7;background:var(--panel);border-radius:16px;padding:1.25rem 1.4rem;overflow-x:auto}
+.bib .btn{position:absolute;top:.8rem;right:.8rem;padding:.45rem .8rem;font-size:.8rem}
+footer{padding-block:2.5rem 3.5rem;font-size:.86rem;color:var(--muted)}
+footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.75rem 2rem}
+
+#tip{position:fixed;z-index:60;pointer-events:none;background:var(--ink);color:var(--bg);font-size:.8rem;line-height:1.45;padding:.45rem .65rem;border-radius:8px;max-width:17rem;transform:translate(-50%,calc(-100% - 12px))}
+#tip .row{display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+#tip .sw{width:10px;height:3px;border-radius:2px}
+
+/* responsive */
+@media (max-width:980px){
+  .evalfig{grid-template-columns:minmax(0,1fr)}
+  .steps4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:900px){
+  .hero,.setup,.finding,.rq4{grid-template-columns:minmax(0,1fr)}
+  .readout{flex-direction:row;flex-wrap:wrap;gap:1.5rem 3rem}
+  .model-line{flex-basis:100%}
+}
+@media (max-width:760px){ .swipe{display:block} }
+@media (max-width:600px){
+  .ring{display:none}
+  .quad{min-height:0}
+  .q.code,.q.db{align-items:flex-start;text-align:left}
+  .q.math,.q.db{justify-content:flex-start}
+  .q.math .tags,.q.db .tags{order:0;margin:.6rem 0 0}
+  .ex2{grid-template-columns:minmax(0,1fr)}
+  .nav nav{gap:1rem}
+}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+
+<header class="nav">
+  <div class="wrap">
+    <nav aria-label="Sections">
+      <a href="#setup">Setup</a>
+      <a href="#benchmark">Benchmark</a>
+      <a href="#findings">Findings</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#cite">Cite</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" id="top">
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div>
+      <p class="kicker">ICLR 2027 submission · Anonymous authors</p>
+      <h1>You changed your mind. <em>The model didn't.</em></h1>
+      <p class="subtitle">Demystifying intent in multi-turn dialogue</p>
+      <p class="lead">Language models keep acting on what was said, even after the user rejected or replaced it.</p>
+      <div class="links" id="links"></div>
+    </div>
+
+    <figure class="hero-video">
+      <video id="heroVideo" src="assets/storybook.mp4" poster="assets/storybook_poster.webp" autoplay muted loop playsinline controls preload="metadata" aria-label="Storybook animation of the paper: a chef, Clawd, and a rejected change"></video>
+      <figcaption>The paper as a 90-second story. Turn on sound for the narration.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ================= SETUP ================= -->
+  <section class="block" id="setup">
+    <div class="sec">
+      <p class="label">The setup</p>
+      <h2>One task, four conversations</h2>
+      <p class="sub">The task arrives turn by turn. After the bag count we insert one event. Only Revised changes the answer.</p>
+    </div>
+    <div class="setup">
+      <div class="panel" id="exStage">
+        <div class="chat-head">
+          <div class="pills" role="group" aria-label="Condition" id="condTabs">
+            <button type="button" data-c="orig" aria-pressed="false"><span class="dot orig"></span>Original</button>
+            <button type="button" data-c="neu" aria-pressed="false"><span class="dot neu"></span>Neutral</button>
+            <button type="button" data-c="ret" aria-pressed="true"><span class="dot ret"></span>Retained</button>
+            <button type="button" data-c="rev" aria-pressed="false"><span class="dot rev"></span>Revised</button>
+          </div>
+          <button type="button" class="icon-btn" id="exReplay" aria-label="Replay conversation"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1M2.5 2.5v3.6h3.6"/></svg></button>
+        </div>
+        <div class="chat" id="exThread"></div>
+      </div>
+      <aside class="readout" aria-live="polite">
+        <div class="ro" id="roBagsBox"><span class="label">Bags in effect</span><span class="big" id="roBags">4</span><span class="hint" id="roBagsHint"></span></div>
+        <div class="ro"><span class="label">Correct answer</span><span class="big" id="roAns">$300</span><span class="hint" id="roAnsHint">4 × 50 lb × $1.50</span></div>
+        <div class="model-line" id="roModel"></div>
+      </aside>
+    </div>
+    <details class="fig"><summary>Figure 1 from the paper</summary><div class="plate"><img src="assets/fig1.webp" alt="Figure 1: single-turn controls, the multi-turn Original conversation, and the three inserted events." loading="lazy" width="1571" height="825"></div></details>
+  </section>
+
+  <!-- ================= BENCHMARK ================= -->
+  <section class="block" id="benchmark">
+    <div class="sec">
+      <p class="label">Benchmark</p>
+      <h2>Intent-Eval</h2>
+      <p class="sub">414 source tasks from four established benchmarks, each with one controlled revision. Four multi-turn conditions and four single-turn controls give 3,312 evaluation instances per model.</p>
+    </div>
+
+    <div class="evalfig" id="evalFig">
+      <div class="ef-card">
+        <div class="ef-h"><h3>Domain overview</h3><span>Four domains from established benchmarks</span></div>
+        <div class="quad" id="quad">
+          <div class="q act" data-d="act"><i class="qi" style="--icon:url(assets/d_actions.png)"></i><b>Actions</b><span class="src">BFCL</span><span class="cnt"><strong>104</strong>sources</span><span class="tags"><em>Function calls</em><em>Arguments</em></span></div>
+          <div class="q code" data-d="code"><i class="qi" style="--icon:url(assets/d_code.png)"></i><b>Code</b><span class="src">HumanEval, LCB</span><span class="cnt"><strong>100</strong>sources</span><span class="tags"><em>Code generation</em><em>Entry points</em></span></div>
+          <div class="q math" data-d="math"><span class="tags"><em>Word problems</em><em>Numerical values</em></span><i class="qi" style="--icon:url(assets/d_math.png)"></i><b>Math</b><span class="src">GSM8K</span><span class="cnt"><strong>103</strong>sources</span></div>
+          <div class="q db" data-d="db"><span class="tags"><em>Text-to-SQL</em><em>Query conditions</em><em>Output fields</em></span><i class="qi" style="--icon:url(assets/d_db.png)"></i><b>Database</b><span class="src">Spider</span><span class="cnt"><strong>107</strong>sources</span></div>
+          <div class="ring" aria-hidden="true">
+            <svg viewBox="-120 -120 240 240" id="ringSvg"></svg>
+            <i class="ri" style="--icon:url(assets/d_actions.png);--ci:var(--act-ink);left:29%;top:29%"></i>
+            <i class="ri" style="--icon:url(assets/d_code.png);--ci:var(--code-ink);left:71%;top:29%"></i>
+            <i class="ri" style="--icon:url(assets/d_math.png);--ci:var(--math-ink);left:29%;top:71%"></i>
+            <i class="ri" style="--icon:url(assets/d_db.png);--ci:var(--db-ink);left:71%;top:71%"></i>
+            <div class="rc"><b>Intent-Eval</b><span>414 sources</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="ef-right">
+        <div class="ef-card" id="efInst">
+          <div class="ef-h"><h3>Evaluation instances</h3><span>per model</span></div>
+          <div id="instRows"></div>
+          <div class="haxis"><span></span><div><span>0</span><span>300</span><span>600</span><span>900</span></div><span></span></div>
+        </div>
+        <div class="ef-card">
+          <div class="ef-h"><h3>Multi-turn dialogue</h3><span class="chipnote">Mean 7.14 turns · range 3–14</span></div>
+          <div class="chart" id="turnChart"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="steps4">
+      <div><span class="rn">I</span><b>Candidate enumeration</b><p>Domain rules propose edits to arguments, entry points, query conditions or numbers.</p></div>
+      <div><span class="rn">II</span><b>Constraint filtering</b><p>Every edit must be unambiguous, atomic and verifiable.</p></div>
+      <div><span class="rn">III</span><b>Reference answers</b><p>One revision per task, with a new reference answer y<sup>(1)</sup>.</p></div>
+      <div><span class="rn">IV</span><b>Review and rendering</b><p>Rendered as one shared proposal: rejected in Retained, accepted in Revised.</p></div>
+    </div>
+    <details class="fig"><summary>Figure 2 from the paper</summary><div class="plate"><img src="assets/fig2.webp" alt="Figure 2: overview and statistics of Intent-Eval." loading="lazy" width="1575" height="624"></div></details>
+  </section>
+
+  <!-- ================= FINDINGS ================= -->
+  <section class="block" id="findings">
+    <div class="sec">
+      <p class="label">Findings</p>
+      <h2>Models lose track of what is in effect</h2>
+      <p class="sub">Eight models in the main comparison, ten in the error analysis.</p>
+    </div>
+
+    <div class="finding">
+      <div>
+        <h3>Every inserted event lowers accuracy.</h3>
+        <div class="stack">
+          <div class="statrow"><span class="big c-neu">−4.43</span><span class="k"><span class="dot neu"></span>Neutral · clarification only</span></div>
+          <div class="statrow"><span class="big c-rev">−5.55</span><span class="k"><span class="dot rev"></span>Revised · change accepted</span></div>
+          <div class="statrow"><span class="big c-ret">−8.06</span><span class="k"><span class="dot ret"></span>Retained · change rejected</span></div>
+        </div>
+        <p class="note">Points of multi-turn accuracy lost relative to Original, eight-model mean. Spreading the task over turns already costs 36.30 pp. Even inside one message, a decision costs 5.74 pp (Revised) and 7.52 pp (Retained).</p>
+      </div>
+      <div class="chart" id="f1Chart"></div>
+    </div>
+
+    <div class="finding">
+      <div>
+        <h3>Wrong answers still carry content that is no longer in effect.</h3>
+        <div class="stack">
+          <div class="statrow"><span class="big c-ret">59.6%</span><span class="k"><span class="dot ret"></span>Retained · uses the rejected proposal</span></div>
+          <div class="statrow"><span class="big c-rev">31.0%</span><span class="k"><span class="dot rev"></span>Revised · keeps the replaced original</span></div>
+        </div>
+        <p class="note">Share of new errors (correct in Original, wrong after the decision) that contain inactive content: 446 of 748 and 201 of 649, pooled over ten models.</p>
+      </div>
+      <div>
+        <div class="pills" role="group" aria-label="Breakdown" id="f2Mode" style="margin-bottom:.75rem">
+          <button type="button" data-m="domain" aria-pressed="true">By domain</button>
+          <button type="button" data-m="model" aria-pressed="false">By model</button>
+        </div>
+        <div class="chart" id="f2Chart"></div>
+        <div class="ex2">
+          <div class="excard"><p class="h"><span class="dot ret"></span>Retained · GPT-5.6-Luna</p><p>Jairus earns $0.80 per task. The user rejects <s>$0.90</s>.</p><p class="ans">Model answers <b class="c-ret">$8</b> using $0.90. Correct: $6.</p></div>
+          <div class="excard"><p class="h"><span class="dot rev"></span>Revised · Claude-Sonnet-5</p><p>The car payment changes from 20% to 21%. The user accepts.</p><p class="ans">Model answers <b class="c-rev">$720</b> using 20%. Correct: $696.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div>
+        <h3>Losses deepen with repetition and persist after the decision.</h3>
+        <div class="stack">
+          <div class="statrow"><span class="big" style="color:var(--p5-ret)">−20.8</span><span class="k">after four rejected proposals</span></div>
+          <div class="statrow"><span class="big" style="color:var(--p5-neu)">−8.1</span><span class="k">after four clarifications</span></div>
+        </div>
+        <p class="note">Change in accuracy (pp) from each path's k = 0, four-model mean. Four clarifications after a decision still cost 2.72 pp (Retained) and 3.50 pp (Revised).</p>
+      </div>
+      <div>
+        <div class="legend5" id="f3Legend"></div>
+        <div class="chart" id="f3Chart"></div>
+      </div>
+    </div>
+    <details class="fig"><summary>Figures 4 and 5 from the paper</summary><div class="plate"><img src="assets/fig4.webp" alt="Figure 4: inactive content in new Retained and Revised errors by domain." loading="lazy" width="1189" height="458"></div><div class="plate"><img src="assets/fig5.webp" alt="Figure 5: accuracy change with interaction depth for four models and four domains." loading="lazy" width="1579" height="1241"></div></details>
+  </section>
+
+  <!-- ================= METHOD ================= -->
+  <section class="block" id="method">
+    <div class="sec">
+      <p class="label">Method</p>
+      <h2>Intent-OPSD</h2>
+      <p class="sub">The frozen Teacher sees the active task; the Student sees the dialogue.</p>
+    </div>
+
+    <div class="stage" id="opsdStage">
+      <div class="stage-top">
+        <div class="steps" role="group" aria-label="Steps" id="opSteps">
+          <button type="button" data-s="1" aria-pressed="false"><b>1</b>Source selection</button>
+          <button type="button" data-s="2" aria-pressed="false"><b>2</b>Input pair</button>
+          <button type="button" data-s="3" aria-pressed="false"><b>3</b>On-policy sample</button>
+          <button type="button" data-s="4" aria-pressed="false"><b>4</b>Teacher evaluation</button>
+          <button type="button" data-s="5" aria-pressed="false"><b>5</b>Update</button>
+        </div>
+        <div class="vsel"><i>v</i>
+          <div class="pills" role="group" aria-label="Condition v" id="vSel">
+            <button type="button" data-v="orig" aria-pressed="false"><span class="dot orig"></span>Orig</button>
+            <button type="button" data-v="neu" aria-pressed="false"><span class="dot neu"></span>Neu</button>
+            <button type="button" data-v="ret" aria-pressed="true"><span class="dot ret"></span>Ret</button>
+            <button type="button" data-v="rev" aria-pressed="false"><span class="dot rev"></span>Rev</button>
+          </div>
+        </div>
+      </div>
+      <div class="stage-scroll">
+        <svg id="opsd" viewBox="0 0 1200 480" role="img" aria-label="Animated Intent-OPSD diagram following Figure 3: source selection, Student policy (trainable), Teacher policy (frozen), and the token-level JS training objective.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah"/></marker>
+            <marker id="ahB" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahB"/></marker>
+            <marker id="ahP" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahP"/></marker>
+            <marker id="ahS" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ahS"/></marker>
+            <symbol id="i-fire" viewBox="0 0 24 25"><path fill="currentColor" d="M12 1.8c.6 3.4-2.4 5.3-2.4 8.2 0 1.4 1 2.4 2.2 2.4 1.5 0 2.3-1.3 2-3 2.8 1.9 4.8 5 4.8 8.1A6.6 6.6 0 0 1 12 24a6.6 6.6 0 0 1-6.6-6.5c0-3.8 2.6-6.3 4.2-8.4 1.4-1.9 2.6-4.2 2.4-7.3z"/><path fill="#ffd27a" d="M12 15.6c1.7 1.5 2.6 2.8 2.6 4.1a2.6 2.6 0 0 1-5.2 0c0-1.3.9-2.6 2.6-4.1z"/></symbol>
+            <symbol id="i-snow" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17l17.4-10"/><path d="M9.5 3.8 12 6l2.5-2.2M9.5 20.2 12 18l2.5 2.2M17.85 18.27 17.2 15 20.35 13.93M20.35 10.07 17.2 9 17.85 5.73M6.15 18.27 6.8 15 3.65 13.93M3.65 10.07 6.8 9 6.15 5.73"/></g></symbol>
+            <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="M7 12.5l3.2 3.2L17 8.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+            <symbol id="i-doc" viewBox="0 0 18 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 1.5h9l5 5v16H2z"/><path d="M11 1.5v5h5M5 11h8M5 15h8M5 19h5"/></g></symbol>
+            <symbol id="i-chat" viewBox="0 0 26 24"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2 3h15v10H8l-4 3.5V13H2z"/><path d="M19 8h5v10h-2v3.5L18 18h-6v-3"/><path d="M5.5 7h8M5.5 10h5"/></g></symbol>
+            <symbol id="i-mag" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></g><path d="M10 6.6l1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3z" fill="#f2b632"/></symbol>
+            <symbol id="i-target" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></g><path d="M12 12l8-8M17 4h3v3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+          </defs>
+          <g id="opBase"></g>
+          <g id="fx"></g>
+        </svg>
+      </div>
+      <p class="swipe">Swipe sideways to see the whole diagram.</p>
+      <div class="cap">
+        <div class="txt"><h4 id="capTitle"></h4><p id="capText"></p></div>
+        <div class="ctrl">
+          <button type="button" class="icon-btn" id="opPrev" aria-label="Previous step"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M9 2 4 7l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+          <button type="button" class="icon-btn solid" id="opPlay" aria-label="Play"></button>
+          <button type="button" class="icon-btn" id="opNext" aria-label="Next step"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M5 2l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <p class="note" style="margin-top:1rem">Token probabilities and the JS value in the animation are illustrative.</p>
+
+    <div class="rq4">
+      <div>
+        <h3 style="margin-bottom:1.25rem">Intent-OPSD lifts multi-turn accuracy.</h3>
+        <div class="stack">
+          <div class="statrow"><span class="big">+10.81</span><span class="k">pp over Base</span></div>
+          <div class="statrow"><span class="big">+3.73</span><span class="k">pp over matched SFT</span></div>
+        </div>
+        <p class="note">Mean over four models and four domains. Intent-OPSD beats Base in all 16 model–domain pairs and SFT in 13, and keeps its gains at every added depth (+9.61 to +11.74 pp over Base). Mean Retained accuracy stays close to SFT.</p>
+      </div>
+      <div>
+        <div class="legend3"><span><i style="background:var(--m-base)"></i>Base</span><span><i style="background:var(--m-sft)"></i>SFT</span><span><i style="background:var(--m-opsd)"></i>Intent-OPSD</span></div>
+        <div class="chart" id="rq4Chart"></div>
+      </div>
+    </div>
+    <div class="t2wrap">
+      <h3>Base vs. SFT vs. Intent-OPSD</h3>
+      <p class="note" style="margin:.4rem 0 1rem">Table 2 of the paper. Four models, four domains, four conditions.</p>
+      <div class="table-scroll"><table class="heat" id="heat2"></table></div>
+      <p class="tnote" id="tblNote2"></p>
+    </div>
+    <details class="fig"><summary>Figure 3 from the paper</summary><div class="plate"><img src="assets/fig3.webp" alt="Figure 3: Intent-OPSD." loading="lazy" width="1575" height="585"></div></details>
+  </section>
+
+  <!-- ================= RESULTS ================= -->
+  <section class="block" id="results">
+    <div class="sec">
+      <p class="label">All results · Table 1</p>
+      <h2>Every model, every domain</h2>
+    </div>
+    <div class="table-scroll"><table class="heat" id="heat"></table></div>
+    <p class="tnote" id="tblNote"></p>
+  </section>
+
+  <!-- ================= CITE ================= -->
+  <section class="block" id="cite">
+    <div class="sec"><p class="label">Cite</p><h2>BibTeX</h2></div>
+    <div class="bib">
+      <pre id="bibtex">@inproceedings{anonymous2027changed,
+  title     = {You Changed Your Mind, The Model Didn't:
+               Demystifying Intent in Multi-Turn Dialogue},
+  author    = {Anonymous},
+  booktitle = {Submitted to the Fifteenth International Conference
+               on Learning Representations},
+  year      = {2027},
+  note      = {Under review}
+}</pre>
+      <button type="button" class="btn" id="copyBib">Copy</button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Builds on <a href="https://openreview.net/forum?id=VKGTGGcwl6" target="_blank" rel="noopener">LLMs Get Lost in Multi-Turn Conversation</a> (Laban et al., ICLR 2026).</span>
+    <span>Numbers from the paper's tables and figures.</span>
+  </div>
+</footer>
+
+<div id="tip" role="tooltip" hidden></div>
+
+<script>
+/* Links. Empty strings show "soon". */
+const LINKS = { paper: "", code: "https://anonymous.4open.science/r/intent-DEC2/" };
+
+const T1 = {"Qwen3.6-27B":{"Math":[98.06,97.09,87.38,93.2,73.79,71.84,66.99,61.17],"Code":[95,93,90,88,81,76,80,72],"DB":[92.52,91.59,91.59,87.85,42.99,43.93,42.06,38.32],"Actions":[96.15,95.19,96.15,85.58,49.04,44.23,47.12,48.08]},"Qwen3-8B":{"Math":[92.23,90.29,75.73,67.96,64.08,64.08,54.37,37.86],"Code":[73,75,42,71,41,43,43,26],"DB":[85.98,85.05,74.77,50.47,38.32,26.17,32.71,17.76],"Actions":[97.12,96.15,83.65,85.58,51.92,50.0,46.15,39.42]},"Llama-3.1-8B":{"Math":[75.73,72.82,62.14,64.08,33.98,29.13,22.33,17.48],"Code":[45,47,43,24,25,21,16,10],"DB":[79.44,78.5,76.64,43.93,22.43,24.3,16.82,19.63],"Actions":[93.27,93.27,72.12,80.77,55.77,52.88,48.08,48.08]},"Gemma-4-26B-A4B":{"Math":[97.09,98.06,87.38,92.23,69.9,65.05,66.02,58.25],"Code":[92,91,71,89,76,54,68,59],"DB":[93.46,90.65,88.79,91.59,42.06,44.86,42.06,35.51],"Actions":[98.08,98.08,92.31,92.31,40.38,31.73,36.54,28.85]},"GPT-5.6-Luna":{"Math":[95.15,96.12,90.29,84.47,76.7,73.79,64.08,62.14],"Code":[96,92,93,83,93,92,93,85],"DB":[94.39,93.46,93.46,90.65,42.99,39.25,48.6,36.45],"Actions":[86.54,86.54,91.35,88.46,41.35,40.38,34.62,33.65]},"Gemini-3.7-Flash":{"Math":[97.09,99.03,92.23,95.15,72.82,66.99,61.17,67.96],"Code":[99,95,83,99,99,68,44,94],"DB":[99.07,99.07,95.33,98.13,42.06,43.93,38.32,36.45],"Actions":[98.08,98.08,99.04,98.08,37.5,32.69,39.42,41.35]},"DeepSeek-V4-Flash-0731":{"Math":[98.06,97.09,94.17,93.2,56.31,57.28,54.37,54.37],"Code":[98,99,100,97,95,90,86,93],"DB":[92.52,93.46,86.92,92.52,36.45,41.12,31.78,35.51],"Actions":[94.23,93.27,94.23,94.23,37.5,34.62,30.77,33.65]},"Claude-Sonnet-5":{"Math":[95.15,92.23,87.38,89.32,65.05,67.96,68.93,65.05],"Code":[97,92,97,96,88,58,88,81],"DB":[94.39,93.46,93.46,92.52,42.06,45.79,41.12,34.58],"Actions":[95.19,93.27,95.19,95.19,50.96,45.19,51.92,53.85]}};
+const T1_OVERALL = [91.73, 90.85, 85.11, 84.21, 55.43, 51.00, 49.88, 47.37];
+const T2 = {"Qwen3-8B":{"Math":[[64.08,64.08,54.37,37.86],[61.17,61.17,59.22,28.16],[66.02,67.96,64.08,23.3]],"Code":[[41,43,43,26],[35,36,37,24],[39,42,45,28]],"DB":[[38.32,26.17,32.71,17.76],[43.93,38.32,43.93,20.56],[45.79,44.86,42.99,27.1]],"Actions":[[51.92,50.0,46.15,39.42],[68.27,71.15,31.73,57.69],[66.35,60.58,66.35,55.77]]},"Gemma-4-26B-A4B":{"Math":[[69.9,65.05,66.02,58.25],[70.87,71.84,66.02,62.14],[81.55,77.67,72.82,60.19]],"Code":[[76,54,68,59],[73,68,67,57],[74,67,67,57]],"DB":[[42.06,44.86,42.06,35.51],[61.68,54.21,46.73,42.99],[64.49,60.75,50.47,45.79]],"Actions":[[40.38,31.73,36.54,28.85],[84.62,79.81,65.38,81.73],[82.69,75.96,83.65,75.96]]},"Qwen2.5-7B-Instruct":{"Math":[[49.51,48.54,46.6,20.39],[48.54,39.81,38.83,20.39],[62.14,52.43,47.57,28.16]],"Code":[[40,44,34,27],[43,46,38,36],[44,50,32,25]],"DB":[[40.19,34.58,33.64,19.63],[42.06,26.17,41.12,8.41],[50.47,32.71,47.66,20.56]],"Actions":[[47.12,50.0,49.04,38.46],[65.38,65.38,34.62,51.92],[65.38,64.42,47.12,31.73]]},"Llama-3.1-8B":{"Math":[[33.98,29.13,22.33,17.48],[50.49,38.83,20.39,33.98],[54.37,48.54,33.98,29.13]],"Code":[[25,21,16,10],[23,23,9,18],[27,24,22,16]],"DB":[[22.43,24.3,16.82,19.63],[41.12,33.64,28.97,18.69],[47.66,40.19,38.32,25.23]],"Actions":[[55.77,52.88,48.08,48.08],[76.92,75.96,60.58,64.42],[79.81,79.81,53.85,68.27]]}};
+const T2_MEAN = [[46.10, 42.71, 40.96, 31.46], [55.57, 51.83, 43.03, 39.13], [59.42, 55.55, 50.93, 38.57]];
+const T2_OVERALL = [40.31, 47.39, 51.12];
+const T2_DEPTH = { base: [9.61, 11.74, 11.67, 10.64], sft: [2.91, 3.86, 2.49, 2.16] };
+/* Figure 4 / Figure 6: inactive-content inclusion among new errors (%), [Retained, Revised]. */
+const INACTIVE = {
+  domain: [["Math", 67.70, 47.94], ["Code", 69.60, 10.08], ["Database", 56.67, 23.24], ["Actions", 42.31, 36.88]],
+  model: [["Qwen3.6-27B", 56.67, 35.19], ["Qwen3-8B", 75.00, 31.15], ["Llama-3.1-8B", 58.54, 33.33], ["Gemma-4-26B", 45.24, 23.33], ["Qwen2.5-7B", 78.22, 25.76], ["Qwen3-4B", 66.67, 39.66], ["GPT-5.6-Luna", 60.00, 34.00], ["Gemini-3.7-Flash", 36.17, 28.57], ["DeepSeek-V4", 52.83, 35.38], ["Claude-Sonnet-5", 39.66, 25.45]]
+};
+/* Table 9, Base rows: four-model pooled accuracy (%) by added blocks k = 0..4 (Figure 5 means). */
+const DEPTH = {
+  neu: [47.58, 43.95, 41.53, 40.12, 39.45], ret: [47.58, 32.19, 27.08, 25.87, 26.81],
+  rn: [31.40, 30.07, 28.56, 27.78, 28.68], vn: [40.88, 38.04, 37.26, 35.27, 37.38]
+};
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const fmt = (v, d = 2) => v.toFixed(d);
+const sgn = (v, d = 2) => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(d);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const RM = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function txt(parent, x, y, s, cls, anchor) { const t = el("text", { x, y, class: cls, "text-anchor": anchor || "start" }, parent); t.textContent = s; return t; }
+/* Text with _{sub} and ^{sup} markers rendered as shifted tspans. */
+function math(parent, x, y, s, cls, anchor) {
+  const t = el("text", { x, y, class: cls || "o-m", "text-anchor": anchor || "start" }, parent);
+  fillMath(t, s); return t;
+}
+function fillMath(t, s) {
+  while (t.firstChild) t.removeChild(t.firstChild);
+  const re = /([_^])\{([^}]*)\}/g; let last = 0, pend = 0, m;
+  const add = (str, dy, small) => { const sp = el("tspan", {}, t); sp.textContent = str; if (dy) sp.setAttribute("dy", dy); if (small) sp.setAttribute("font-size", "0.7em"); };
+  while ((m = re.exec(s))) {
+    const pre = s.slice(last, m.index);
+    if (pre) { add(pre, pend ? -pend : 0, false); pend = 0; }
+    const d = m[1] === "_" ? 4 : -7;
+    add(m[2], (pend ? -pend : 0) + d, true); pend = d; last = re.lastIndex;
+  }
+  const rest = s.slice(last);
+  if (rest) add(rest, pend ? -pend : 0, false);
+}
+function restart(e, cls) { if (!e) return; e.classList.remove(cls); void e.getBoundingClientRect(); e.classList.add(cls); }
+function onceVisible(node, fn, th = 0.3) {
+  if (!("IntersectionObserver" in window)) return;
+  const io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) { io.disconnect(); fn(); } }, { threshold: th });
+  io.observe(node);
+}
+/* Elements below the fold start in their "pre" state and animate in when first seen. */
+function reveal(node) {
+  if (RM || !("IntersectionObserver" in window) || !node) return;
+  if (node.getBoundingClientRect().top < innerHeight) return;
+  node.classList.add("pre");
+  onceVisible(node, () => requestAnimationFrame(() => requestAnimationFrame(() => node.classList.remove("pre"))), 0.15);
+}
+function observe(node, fn) {
+  let last = 0;
+  new ResizeObserver(() => { const w = Math.round(node.clientWidth); if (w && w !== last) { last = w; fn(w); } }).observe(node);
+}
+function flyGhost(src, dst, box, text) {
+  return new Promise(res => {
+    try {
+      if (RM || !src || !dst || !box || !Element.prototype.animate) { res(); return; }
+      const b = box.getBoundingClientRect(), s = src.getBoundingClientRect(), d = dst.getBoundingClientRect();
+      const g = document.createElement("span"); g.className = "ghost"; g.textContent = text; box.appendChild(g);
+      const gw = g.offsetWidth, gh = g.offsetHeight;
+      const x0 = s.left - b.left - 2, y0 = s.top - b.top + (s.height - gh) / 2;
+      const x1 = d.left - b.left + (d.width - gw) / 2, y1 = d.top - b.top + (d.height - gh) / 2;
+      const a = g.animate([
+        { transform: `translate(${x0}px,${y0}px)`, opacity: 0 },
+        { transform: `translate(${x0}px,${y0}px)`, opacity: 1, offset: .15 },
+        { transform: `translate(${(x0 + x1) / 2 + 30}px,${(y0 + y1) / 2}px)`, opacity: 1, offset: .55 },
+        { transform: `translate(${x1}px,${y1}px)`, opacity: 1 }
+      ], { duration: 1200, easing: "cubic-bezier(.45,0,.25,1)" });
+      const done = () => { g.remove(); res(); };
+      a.onfinish = done; a.oncancel = done;
+    } catch (e) { res(); }
+  });
+}
+
+/* ---------- tooltip ---------- */
+const tip = $("#tip");
+let tipLock = false;
+function showTip(html, x, y) {
+  tip.innerHTML = html; tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(Math.max(x, w / 2 + 8), innerWidth - w / 2 - 8) + "px";
+  tip.style.top = (y - h - 16 < 0 ? y + h + 26 : y) + "px";
+}
+function hideTip() { tip.hidden = true; }
+document.addEventListener("pointermove", e => {
+  if (tipLock) return;
+  const t = e.target.closest && e.target.closest("[data-tip]");
+  if (t) showTip(t.getAttribute("data-tip"), e.clientX, e.clientY); else hideTip();
+});
+addEventListener("scroll", () => { if (!tipLock) hideTip(); }, { passive: true });
+
+/* ---------- links ---------- */
+$("#links").innerHTML = (LINKS.paper ? `<a class="btn primary" href="${esc(LINKS.paper)}" target="_blank" rel="noopener">Paper</a>` : `<span class="btn soon" aria-disabled="true">Paper <small>soon</small></span>`)
+  + (LINKS.code ? `<a class="btn" href="${esc(LINKS.code)}" target="_blank" rel="noopener">Code &amp; data</a>` : "")
+  + `<a class="btn" href="#cite">BibTeX</a>`;
+
+/* ---------- hero video ---------- */
+(function () {
+  const v = $("#heroVideo"); if (!v) return;
+  if (RM) { v.removeAttribute("autoplay"); v.pause(); }
+  else { const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); }
+})();
+
+/* ---------- setup player ---------- */
+const TAG = { prop: '<span class="tag prop">Proposal</span>', rej: '<span class="tag rej">Rejected</span>', acc: '<span class="tag acc">Accepted</span>' };
+const PROP = { r: "user", t: 'The chef bought <span class="pv">2 bags</span> instead? Does this alternative make sense?', tag: "prop", fx: "propose" };
+const EX = {
+  pre: [
+    { r: "user", t: "What is the total cost?" },
+    { r: "model", t: "What are the purchase details?" },
+    { r: "user", t: "The chef bought <b>4 bags</b> of onions.", fx: "bags" },
+    { r: "model", t: "How heavy is each bag?" }
+  ],
+  post: [
+    { r: "user", t: "Each bag weighs 50 pounds." },
+    { r: "model", t: "What is the price per pound?" },
+    { r: "user", t: "Each pound costs $1.50." }
+  ],
+  ev: {
+    orig: [],
+    neu: [
+      { r: "user", t: "How does bag count affect cost?", fx: "ask" },
+      { r: "model", t: "It scales the total weight." },
+      { r: "user", t: "Why does bag count matter?", fx: "ask" },
+      { r: "model", t: "More bags mean higher cost." }
+    ],
+    ret: [PROP, { r: "model", t: "That would halve it." }, { r: "user", t: "Ignore that revision.", tag: "rej", fx: "reject" }, { r: "model", t: "Still 4 bags." }],
+    rev: [PROP, { r: "model", t: "That would halve it." }, { r: "user", t: "Accept that revision.", tag: "acc", fx: "accept" }, { r: "model", t: "Use 2 bags." }]
+  },
+  name: { orig: "Original", neu: "Neutral", ret: "Retained", rev: "Revised" }
+};
+PROP.t = 'Could we consider <span class="pv">2 bags</span> instead?';
+let exCond = "ret", exRun = 0;
+function exSteps(c) {
+  return [...EX.pre.map(m => ({ ...m })), ...EX.ev[c].map(m => ({ ...m, ev: true })), ...EX.post.map(m => ({ ...m })), { r: "model", final: true }];
+}
+function finalMsg(c) {
+  if (c === "rev") return { t: "2 × 50 × $1.50 = <b>$150</b>", cls: "good", v: '<p class="verdict"><i class="ok" aria-hidden="true">✓</i>Uses the accepted value.</p>' };
+  if (c === "ret") return { t: '<span class="leak in" id="exLeak">2</span> × 50 × $1.50 = <b>$150</b>', cls: "bad", v: '<p class="verdict"><i class="x" aria-hidden="true">✕</i>A typical error: uses the rejected value.</p>' };
+  return { t: "4 × 50 × $1.50 = <b>$300</b>", cls: "good", v: '<p class="verdict"><i class="ok" aria-hidden="true">✓</i>Correct.</p>' };
+}
+function msgHTML(m, k, prev) {
+  const user = m.r === "user";
+  let t = m.t, cls = "", v = "";
+  if (m.final) { const f = finalMsg(exCond); t = f.t; cls = f.cls; v = f.v; }
+  return `<div class="msg ${m.r}${prev === m.r ? " cont" : ""}" data-k="${k}"><img class="ava" src="assets/${user ? "chef" : "robot"}.png" alt=""><div class="body"><div class="bubble ${cls}"><span class="content">${t}${m.tag ? TAG[m.tag] : ""}</span><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span></div>${v}</div></div>`;
+}
+function renderEx() {
+  const steps = exSteps(exCond);
+  let h = "", prev = null, inEv = false;
+  steps.forEach((m, k) => {
+    if (m.ev && !inEv) { h += `<div class="event ${exCond}${exCond === "ret" ? " strike" : ""}${exCond === "rev" ? " accepted" : ""}"><p class="ev-label"><span class="dot ${exCond}"></span>Inserted · ${EX.name[exCond]}</p>`; inEv = true; prev = null; }
+    if (!m.ev && inEv) { h += "</div>"; inEv = false; prev = null; }
+    if (!m.ev && k === EX.pre.length && exCond === "orig") h += `<div class="insert-pt">+ Insert point · Original adds nothing</div>`;
+    h += msgHTML(m, k, prev); prev = m.r;
+  });
+  if (inEv) h += "</div>";
+  $("#exThread").innerHTML = h;
+  $$("#condTabs button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.c === exCond)));
+}
+function exState(steps, upto) {
+  const s = { bags: null, pend: null, ask: 0, final: false };
+  for (let i = 0; i <= upto && i < steps.length; i++) {
+    const f = steps[i].fx;
+    if (f === "bags") s.bags = 4;
+    if (f === "propose") s.pend = "open";
+    if (f === "reject") s.pend = "rejected";
+    if (f === "accept") { s.pend = "accepted"; s.bags = 2; }
+    if (f === "ask") s.ask++;
+    if (steps[i].final) s.final = true;
+  }
+  return s;
+}
+function renderReadout(s, fx) {
+  const bags = $("#roBags");
+  bags.classList.toggle("changed", s.pend === "accepted");
+  bags.innerHTML = s.bags == null ? "—" : (s.pend === "accepted" ? '<span class="old">4</span>2' : String(s.bags));
+  $("#roBagsHint").innerHTML = { open: '<span class="p">2 proposed</span>', rejected: '<span class="r">2 proposed, then rejected</span>', accepted: '<span class="a">2 accepted</span>' }[s.pend] || (s.ask ? "Clarified, unchanged" : "");
+  const correct = exCond === "rev" ? "$150" : "$300";
+  $("#roAns").textContent = s.final ? correct : "—";
+  $("#roAnsHint").textContent = `${exCond === "rev" ? 2 : 4} × 50 lb × $1.50`;
+  const bad = exCond === "ret";
+  $("#roModel").innerHTML = s.final ? `<img src="assets/robot.png" alt="">Model answered <b class="${bad ? "bad" : "good"}">${bad ? "$150" : correct}</b>` : "";
+  if (["bags", "propose", "reject", "accept", "ask"].includes(fx)) restart($("#roBagsBox"), "flash");
+}
+function showExFinal() { ++exRun; renderEx(); const st = exSteps(exCond); renderReadout(exState(st, st.length - 1)); }
+async function playEx(from) {
+  const my = ++exRun, alive = () => my === exRun;
+  renderEx();
+  const th = $("#exThread"), steps = exSteps(exCond), ev = $(".event", th), ins = $(".insert-pt", th);
+  th.classList.add("playing");
+  const leakEl = $("#exLeak"); if (leakEl) leakEl.classList.remove("in");
+  if (ev) ev.classList.remove("strike");
+  for (let i = 0; i < from; i++) { const e = th.querySelector(`.msg[data-k="${i}"]`); if (e) e.classList.add("in"); }
+  renderReadout(exState(steps, from - 1));
+  for (let i = from; i < steps.length; i++) {
+    if (!alive()) return;
+    const st = steps[i], e = th.querySelector(`.msg[data-k="${i}"]`);
+    if (st.ev && ev && !ev.classList.contains("in")) { ev.classList.add("in"); await sleep(300); if (!alive()) return; }
+    if (i === EX.pre.length && ins) { ins.classList.add("in"); await sleep(700); if (!alive()) return; }
+    if (st.r === "model") { e.classList.add("typing", "in"); await sleep(st.final ? 900 : 550); if (!alive()) return; e.classList.remove("typing"); }
+    else e.classList.add("in");
+    renderReadout(exState(steps, i), st.fx);
+    if (st.fx === "reject" && ev) { await sleep(300); if (!alive()) return; ev.classList.add("strike"); }
+    if (st.final && exCond === "ret") {
+      const leak = $("#exLeak");
+      await flyGhost($(".pv", th), leak, $("#exStage"), "2"); if (!alive()) return;
+      if (leak) leak.classList.add("in");
+    }
+    await sleep(st.r === "user" ? 750 : 450);
+  }
+  if (alive()) th.classList.remove("playing");
+}
+$("#condTabs").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; exCond = b.dataset.c; RM ? showExFinal() : playEx(EX.pre.length); });
+$("#exReplay").addEventListener("click", () => RM ? showExFinal() : playEx(0));
+showExFinal();
+if (!RM) onceVisible($("#exStage"), () => playEx(0));
+
+/* ---------- Intent-Eval figure (Figure 2) ---------- */
+const DOMS = [
+  { k: "act", name: "Actions", inst: 832, t: [4, 7.22, 12] },
+  { k: "code", name: "Code", inst: 800, t: [4, 8.44, 12] },
+  { k: "db", name: "Database", inst: 856, t: [3, 5.83, 9] },
+  { k: "math", name: "Math", inst: 824, t: [4, 7.18, 14] }
+];
+(function ring() {
+  const svg = $("#ringSvg"), R = 104, r = 98, gap = 3;
+  const P = (a, rad) => [Math.cos(a * Math.PI / 180) * rad, Math.sin(a * Math.PI / 180) * rad];
+  [["act", 180, 270], ["code", 270, 360], ["db", 0, 90], ["math", 90, 180]].forEach(([k, a0, a1], i) => {
+    const [wx0, wy0] = P(a0, r), [wx1, wy1] = P(a1, r);
+    el("path", { d: `M0,0 L${wx0},${wy0} A${r},${r} 0 0 1 ${wx1},${wy1} Z`, class: "wedge fade", style: `fill:color-mix(in oklab,var(--${k}) 28%,var(--bg));--d:${200 + i * 120}ms` }, svg);
+    const [x0, y0] = P(a0 + gap, R), [x1, y1] = P(a1 - gap, R);
+    el("path", { d: `M${x0},${y0} A${R},${R} 0 0 1 ${x1},${y1}`, class: "arc draw", pathLength: 1, style: `stroke:var(--${k});--d:${i * 160}ms` }, svg);
+  });
+  $("#instRows").innerHTML = DOMS.map((d, i) => `<div class="hrow" data-dd="${d.k}" data-tip="${esc(`<b>${d.name}</b> · ${d.inst} instances`)}"><b style="color:var(--${d.k}-ink)">${d.name}</b><span class="tr"><i style="width:${d.inst / 900 * 100}%;background:var(--${d.k});--d:${i * 90}ms"></i></span><span class="v">${d.inst}</span></div>`).join("");
+})();
+function renderTurns(W) {
+  const lw = 76, mr = 14, top = 26, rowH = 40, H = top + DOMS.length * rowH + 26;
+  const x = v => lw + v / 14 * (W - lw - mr);
+  let s = "";
+  [0, 2, 4, 6, 8, 10, 12, 14].forEach(t => { s += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${top - 8}" y2="${top + DOMS.length * rowH}" stroke-dasharray="2 4"/><text class="tick" x="${x(t)}" y="${H - 6}" text-anchor="middle">${t}</text>`; });
+  DOMS.forEach((d, i) => {
+    const yc = top + i * rowH + rowH / 2, [mn, mean, mx] = d.t;
+    s += `<g data-dd="${d.k}" data-tip="${esc(`<b>${d.name}</b> · mean ${mean} turns, range ${mn}–${mx}`)}"><rect class="hit" x="0" y="${yc - rowH / 2}" width="${W}" height="${rowH}"/>`
+      + `<text class="lbl2" x="0" y="${yc + 5}" style="fill:var(--${d.k}-ink)">${d.name}</text>`
+      + `<rect class="bar" x="${x(mn)}" y="${yc - 6}" width="${x(mx) - x(mn)}" height="12" rx="3" style="fill:color-mix(in oklab,var(--${d.k}) 35%,var(--bg));--d:${i * 90}ms"/>`
+      + `<line x1="${x(mn)}" x2="${x(mn)}" y1="${yc - 9}" y2="${yc + 9}" style="stroke:var(--${d.k})" stroke-width="2"/><line x1="${x(mx)}" x2="${x(mx)}" y1="${yc - 9}" y2="${yc + 9}" style="stroke:var(--${d.k})" stroke-width="2"/>`
+      + `<circle class="fade" cx="${x(mean)}" cy="${yc}" r="6" stroke-width="2" style="fill:var(--${d.k});stroke:var(--bg);--d:${600 + i * 90}ms"/>`
+      + `<text class="tick fade" x="${x(mean)}" y="${yc - 12}" text-anchor="middle" style="fill:var(--ink);--d:${700 + i * 90}ms">${mean}</text>`
+      + `<text class="tick" x="${x(mn) - 6}" y="${yc + 4}" text-anchor="end">${mn}</text><text class="tick" x="${x(mx) + 6}" y="${yc + 4}">${mx}</text></g>`;
+  });
+  $("#turnChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Mean and range of dialogue turns: Actions 7.22 (4–12), Code 8.44 (4–12), Database 5.83 (3–9), Math 7.18 (4–14).">${s}</svg>`;
+}
+reveal($("#evalFig"));
+observe($("#turnChart"), renderTurns);
+(function linkHover() {
+  const fig = $("#evalFig");
+  fig.addEventListener("pointerover", e => { const t = e.target.closest("[data-d],[data-dd]"); if (t) fig.dataset.hl = t.dataset.d || t.dataset.dd; });
+  fig.addEventListener("pointerleave", () => { delete fig.dataset.hl; });
+})();
+
+/* ---------- RQ1: condition drops ---------- */
+function renderF1(W) {
+  const ORIG = 55.43;
+  const rows = [
+    { name: "One message", v: 91.73, c: "gray", grp: "Single-turn" },
+    { name: "Original", v: ORIG, c: "orig", grp: "Multi-turn" },
+    { name: "Neutral", v: 51.00, c: "neu", d: -4.43 },
+    { name: "Revised", v: 49.88, c: "rev", d: -5.55 },
+    { name: "Retained", v: 47.37, c: "ret", d: -8.06 }
+  ];
+  const lw = W < 460 ? 132 : 158, rw = 80, rowH = 42, barH = 15, grpH = 22;
+  const x = v => lw + v / 100 * (W - lw - rw);
+  let y = 0, s = "", ys = [];
+  rows.forEach(r => { if (r.grp) { y += r.grp === "Multi-turn" ? 8 : 0; s += `<text class="tick" x="0" y="${y + 14}" style="fill:var(--muted)">${r.grp}</text>`; y += grpH; } ys.push(y); y += rowH; });
+  const H = y + 24;
+  [0, 25, 50, 75, 100].forEach(t => { s += `<line class="grid" x1="${x(t)}" x2="${x(t)}" y1="${grpH - 4}" y2="${y}"/><text class="tick" x="${x(t)}" y="${H - 4}" text-anchor="middle">${t}</text>`; });
+  s += `<line class="refline" x1="${x(ORIG)}" x2="${x(ORIG)}" y1="${ys[1] + 4}" y2="${ys[4] + rowH - 6}"/>`;
+  rows.forEach((r, i) => {
+    const yb = ys[i] + (rowH - barH) / 2, w = x(r.v) - x(0), rr = 4;
+    const d = `M${x(0)},${yb} h${w - rr} a${rr},${rr} 0 0 1 ${rr},${rr} v${barH - 2 * rr} a${rr},${rr} 0 0 1 -${rr},${rr} h-${w - rr} z`;
+    let g = `<rect class="hit" x="0" y="${ys[i]}" width="${W}" height="${rowH}"/><text class="lbl" x="0" y="${yb + barH - 2}">${r.name}</text><text class="val" x="${lw - 12}" y="${yb + barH - 2}" text-anchor="end">${fmt(r.v)}</text><path class="bar f-${r.c}" style="--d:${i * 90}ms" d="${d}"/>`;
+    if (r.d) {
+      g += `<rect class="fade f-${r.c}" x="${x(r.v)}" y="${yb}" width="${x(ORIG) - x(r.v)}" height="${barH}" fill-opacity=".22" style="--d:${900 + i * 120}ms"/>`;
+      g += `<text class="val fade t-${r.c}" x="${x(ORIG) + 8}" y="${yb + barH - 2}" style="--d:${1000 + i * 120}ms">${sgn(r.d)} pp</text>`;
+    }
+    if (i === 1) g += `<text class="val fade" x="${x(ORIG) + 8}" y="${yb + barH - 2}" style="--d:900ms;fill:var(--muted)">−36.30 pp</text>`;
+    s += `<g data-tip="${esc(`<b>${r.grp === "Single-turn" ? "Single-turn Original" : "Multi-turn " + r.name}</b> · ${fmt(r.v)}%` + (r.d ? `<br>${sgn(r.d)} pp vs. Original` : ""))}">${g}</g>`;
+  });
+  $("#f1Chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Accuracy: single-turn 91.73; multi-turn Original 55.43, Neutral 51.00 (−4.43), Revised 49.88 (−5.55), Retained 47.37 (−8.06).">${s}</svg>`;
+}
+reveal($("#f1Chart")); observe($("#f1Chart"), renderF1);
+
+/* ---------- RQ2: inactive content butterfly (Figure 4) ---------- */
+let f2Mode = "domain";
+function renderF2(W) {
+  W = W || $("#f2Chart").clientWidth;
+  const rows = INACTIVE[f2Mode], lw = W < 460 ? 96 : 128, rowH = f2Mode === "domain" ? 40 : 30, barH = f2Mode === "domain" ? 18 : 14, top = 34;
+  const cx = lw + (W - lw) / 2, half = (W - lw) / 2 - 6, sc = v => v / 100 * half;
+  const H = top + rows.length * rowH + 26;
+  let s = `<text x="${cx - 12}" y="16" text-anchor="end"><tspan class="hdr">Retained </tspan><tspan class="hdrv">59.63%</tspan></text><text x="${cx + 12}" y="16"><tspan class="hdr">Revised </tspan><tspan class="hdrv">30.97%</tspan></text>`;
+  [-100, -50, 0, 50, 100].forEach(t => { const xx = cx + sc(t); s += `<line class="grid" x1="${xx}" x2="${xx}" y1="${top - 6}" y2="${top + rows.length * rowH}" stroke-dasharray="2 4"/><text class="tick" x="${xx}" y="${H - 4}" text-anchor="middle">${Math.abs(t)}</text>`; });
+  rows.forEach(([name, a, b], i) => {
+    const yb = top + i * rowH + (rowH - barH) / 2;
+    s += `<g data-tip="${esc(`<b>${name}</b><br>Retained ${fmt(a)}% · Revised ${fmt(b)}%`)}"><rect class="hit" x="0" y="${top + i * rowH}" width="${W}" height="${rowH}"/>`
+      + `<text class="lbl" x="0" y="${yb + barH - 3}">${name}</text>`
+      + `<rect class="bar rtl f-ret" x="${cx - sc(a)}" y="${yb}" width="${sc(a)}" height="${barH}" rx="3" style="--d:${i * 60}ms"/>`
+      + `<rect class="bar f-rev" x="${cx}" y="${yb}" width="${sc(b)}" height="${barH}" rx="3" style="--d:${i * 60}ms"/>`
+      + `<text class="val fade" x="${cx - sc(a) - 6}" y="${yb + barH - 3}" text-anchor="end" style="--d:${600 + i * 60}ms">${fmt(a)}%</text>`
+      + `<text class="val fade" x="${cx + sc(b) + 6}" y="${yb + barH - 3}" style="--d:${600 + i * 60}ms">${fmt(b)}%</text></g>`;
+  });
+  s += `<line class="axis" x1="${cx}" x2="${cx}" y1="${top - 6}" y2="${top + rows.length * rowH}"/>`;
+  $("#f2Chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Inactive content among new errors, Retained versus Revised, by ${f2Mode}.">${s}</svg>`;
+}
+$("#f2Mode").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; f2Mode = b.dataset.m; $$("#f2Mode button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); renderF2(); });
+reveal($("#f2Chart")); observe($("#f2Chart"), renderF2);
+
+/* ---------- RQ3: depth paths (Figure 5) ---------- */
+const PATHS = [
+  { k: "neu", label: "Neutral ×k", c: "--p5-neu", dash: "", mk: "circle" },
+  { k: "ret", label: "Retained ×k", c: "--p5-ret", dash: "", mk: "square" },
+  { k: "rn", label: "Retained → Neutral(k)", c: "--p5-rn", dash: "6 4", mk: "diamond" },
+  { k: "vn", label: "Revised → Neutral(k)", c: "--p5-vn", dash: "6 3 2 3", mk: "triangle" }
+];
+function marker(kind, x, y, c, d) {
+  const st = `fill:var(--bg);stroke:var(${c});stroke-width:1.8;--d:${d}ms`;
+  if (kind === "circle") return `<circle class="fade" cx="${x}" cy="${y}" r="4.5" style="${st}"/>`;
+  if (kind === "square") return `<rect class="fade" x="${x - 4.2}" y="${y - 4.2}" width="8.4" height="8.4" style="${st}"/>`;
+  if (kind === "diamond") return `<path class="fade" d="M${x},${y - 5.6} L${x + 5.6},${y} L${x},${y + 5.6} L${x - 5.6},${y} Z" style="${st}"/>`;
+  return `<path class="fade" d="M${x},${y - 5.5} L${x + 5.2},${y + 4} L${x - 5.2},${y + 4} Z" style="${st}"/>`;
+}
+$("#f3Legend").innerHTML = PATHS.map(p => `<span><svg viewBox="0 0 26 12" aria-hidden="true"><line x1="1" y1="6" x2="25" y2="6" style="stroke:var(${p.c})" stroke-width="2" ${p.dash ? `stroke-dasharray="${p.dash}"` : ""}/>${marker(p.mk, 13, 6, p.c, 0).replace('class="fade"', "")}</svg>${p.label}</span>`).join("");
+function renderF3(W) {
+  const series = PATHS.map(p => ({ ...p, v: DEPTH[p.k], d: DEPTH[p.k].map(x => x - DEPTH[p.k][0]) }));
+  const lo = -24, hi = 2, wide = W >= 520;
+  const ml = 38, mr = wide ? 70 : 12, mt = 10, mb = 38, H = Math.round(Math.min(330, Math.max(240, W * .5)));
+  const pw = W - ml - mr, ph = H - mt - mb, X = k => ml + k / 4 * pw, Y = v => mt + (hi - v) / (hi - lo) * ph;
+  let s = "";
+  [0, -5, -10, -15, -20].forEach(t => { s += `<line class="${t === 0 ? "axis" : "grid"}" x1="${ml}" x2="${ml + pw}" y1="${Y(t)}" y2="${Y(t)}" ${t === 0 ? 'stroke-dasharray="3 4" style="stroke:var(--muted)"' : ""}/><text class="tick" x="${ml - 8}" y="${Y(t) + 4}" text-anchor="end">${t === 0 ? "0" : "−" + Math.abs(t)}</text>`; });
+  [0, 1, 2, 3, 4].forEach(k => { s += `<text class="tick" x="${X(k)}" y="${mt + ph + 18}" text-anchor="middle">${k}</text>`; });
+  s += `<text class="tick" x="${ml + pw / 2}" y="${H - 2}" text-anchor="middle">additional event blocks k</text>`;
+  series.forEach((sr, i) => {
+    const d = sr.d.map((v, k) => `${k ? "L" : "M"}${X(k).toFixed(1)},${Y(v).toFixed(1)}`).join("");
+    s += sr.dash
+      ? `<path d="${d}" fill="none" class="fade" style="stroke:var(${sr.c});--d:${i * 200}ms" stroke-width="2" stroke-dasharray="${sr.dash}" stroke-linejoin="round"/>`
+      : `<path d="${d}" pathLength="1" fill="none" class="draw" style="stroke:var(${sr.c});--d:${i * 200}ms" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    sr.d.forEach((v, k) => { s += marker(sr.mk, X(k), Y(v), sr.c, 400 + k * 120); });
+  });
+  if (wide) {
+    const L = series.map(sr => ({ sr, y: Y(sr.d[4]) })).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < L.length; i++) if (L[i].y - L[i - 1].y < 15) L[i].y = L[i - 1].y + 15;
+    L.forEach(o => { s += `<text class="val fade" x="${X(4) + 12}" y="${o.y + 4}" style="fill:var(${o.sr.c});--d:1200ms">${sgn(o.sr.d[4])}</text>`; });
+  }
+  s += `<line id="f3x" class="cross" x1="0" x2="0" y1="${mt}" y2="${mt + ph}" visibility="hidden"/><rect id="f3hit" class="hit" x="${ml - 10}" y="${mt}" width="${pw + 20}" height="${ph}"/>`;
+  $("#f3Chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Accuracy change from each path's k=0 baseline: Neutral×k −8.13, Retained×k −20.77, Retained→Neutral −2.72, Revised→Neutral −3.50 at k=4.">${s}</svg>`;
+  const svg = $("#f3Chart svg"), cross = $("#f3x"), hit = $("#f3hit");
+  const move = e => {
+    const r = svg.getBoundingClientRect(), k = Math.max(0, Math.min(4, Math.round(((e.clientX - r.left) * W / r.width - ml) / pw * 4)));
+    cross.setAttribute("x1", X(k)); cross.setAttribute("x2", X(k)); cross.setAttribute("visibility", "visible");
+    tipLock = true;
+    showTip(`<b>k = ${k}</b>` + series.map(sr => `<div class="row"><span class="sw" style="background:var(${sr.c})"></span>${sr.label} · ${sgn(sr.d[k])} pp (${fmt(sr.v[k])}%)</div>`).join(""), r.left + X(k) * r.width / W, r.top + mt + 4);
+  };
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move);
+  hit.addEventListener("pointerleave", () => { tipLock = false; cross.setAttribute("visibility", "hidden"); hideTip(); });
+}
+reveal($("#f3Chart")); observe($("#f3Chart"), renderF3);
+
+/* ---------- RQ4 chart (Table 2 means) ---------- */
+function renderRQ4(W) {
+  const groups = [["Original", 0], ["Neutral", 1], ["Revised", 2], ["Retained", 3], ["Overall", 4]];
+  const methods = [["Base", "f-base"], ["SFT", "f-sft"], ["Intent-OPSD", "f-opsd"]];
+  const val = (m, g) => g === 4 ? T2_OVERALL[m] : T2_MEAN[m][g];
+  const ml = 30, mt = 18, mb = 30, H = 260, ph = H - mt - mb, pw = W - ml - 4;
+  const gw = pw / groups.length, bw = Math.min(22, (gw - 18) / 3), Y = v => mt + (1 - v / 70) * ph;
+  let s = "";
+  [0, 20, 40, 60].forEach(t => { s += `<line class="grid" x1="${ml}" x2="${W}" y1="${Y(t)}" y2="${Y(t)}"/><text class="tick" x="${ml - 6}" y="${Y(t) + 4}" text-anchor="end">${t}</text>`; });
+  groups.forEach(([gname, gi], i) => {
+    const x0 = ml + i * gw + (gw - 3 * bw - 6) / 2;
+    if (gi === 4) s += `<rect x="${ml + i * gw + 4}" y="${mt - 6}" width="${gw - 8}" height="${ph + 6}" rx="10" style="fill:var(--panel)"/>`;
+    methods.forEach(([mname, cls], mi) => {
+      const v = val(mi, gi), xx = x0 + mi * (bw + 3), h = Y(0) - Y(v);
+      s += `<g data-tip="${esc(`<b>${gname}</b> · ${mname} ${fmt(v)}%`)}"><rect class="bar up ${cls}" x="${xx}" y="${Y(v)}" width="${bw}" height="${h}" rx="3" style="--d:${i * 80 + mi * 40}ms"/></g>`;
+      if (gi === 4) s += `<text class="tick fade" x="${xx + bw / 2}" y="${Y(v) - 6}" text-anchor="middle" style="fill:var(--ink);--d:900ms">${fmt(v, 1)}</text>`;
+    });
+    s += `<text class="tick" x="${ml + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle" style="fill:var(--ink-2)">${gname}</text>`;
+  });
+  $("#rq4Chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Mean accuracy by condition for Base, SFT and Intent-OPSD; overall 40.31, 47.39, 51.12.">${s}</svg>`;
+}
+reveal($("#rq4Chart")); observe($("#rq4Chart"), renderRQ4);
+
+/* ---------- Intent-OPSD stage (Figure 3) ---------- */
+const OP = {
+  run: 0, step: 0, playing: false, v: "ret",
+  view: { orig: 0, neu: 0, ret: 0, rev: 1 },
+  cand: ["4", "2", "8", "50"],
+  pS: { orig: [.74, .12, .08, .06], neu: [.62, .24, .08, .06], ret: [.30, .58, .07, .05], rev: [.22, .68, .06, .04] },
+  pT: { orig: [.88, .06, .03, .03], neu: [.88, .06, .03, .03], ret: [.88, .06, .03, .03], rev: [.05, .89, .03, .03] },
+  tok: { orig: ["4", "×", "50", "×", "$1.50", "=", "$300"], neu: ["4", "×", "50", "×", "$1.50", "=", "$300"], ret: ["2", "×", "50", "×", "$1.50", "=", "$150"], rev: ["2", "×", "50", "×", "$1.50", "=", "$150"] },
+  hv: { orig: "… 4 bags · 50 lb · $1.50", neu: "… 4 bags · “Why does bag count matter?”", ret: "… 2 bags? · Ignore that revision.", rev: "… 2 bags? · Accept that revision." },
+  cv: { 0: "S_{orig} · 4 bags of onions …", 1: "S_{Dir} · 2 bags of onions …" }
+};
+function js2(p, q) { let s = 0; for (let i = 0; i < p.length; i++) { const m = (p[i] + q[i]) / 2; if (p[i]) s += .5 * p[i] * Math.log2(p[i] / m); if (q[i]) s += .5 * q[i] * Math.log2(q[i] / m); } return s; }
+const S = {};
+(function buildStage() {
+  const base = $("#opBase");
+  const part = id => el("g", { class: "part", id }, base);
+  const box = (g, x, y, w, h, cls) => el("rect", { x, y, width: w, height: h, rx: 10, class: "bx " + cls }, g);
+  const ic = (g, sym, x, y, w, h, cls) => el("use", { href: "#i-" + sym, x, y, width: w, height: h, class: cls }, g);
+  const ar = (g, d, cls, mk) => el("path", { d, class: cls || "ar", "marker-end": `url(#${mk || "ah"})` }, g);
+  /* panels */
+  el("rect", { x: 12, y: 12, width: 318, height: 456, rx: 16, class: "pn src" }, base);
+  el("path", { d: "M12,28 a16,16 0 0 1 16,-16 h286 a16,16 0 0 1 16,16 v40 h-318 z", class: "pnh src" }, base);
+  el("image", { href: "assets/selector.png", x: 16, y: 2, width: 66, height: 66 }, base);
+  txt(base, 90, 47, "Source selection", "pt k-src");
+  el("path", { d: "M338,206 h12 v-10 l16,18 l-16,18 v-10 h-12 z", class: "bigar" }, base);
+  el("rect", { x: 372, y: 12, width: 330, height: 362, rx: 16, class: "pn stu" }, base);
+  el("path", { d: "M372,28 a16,16 0 0 1 16,-16 h298 a16,16 0 0 1 16,16 v40 h-330 z", class: "pnh stu" }, base);
+  el("image", { href: "assets/student.png", x: 374, y: 0, width: 70, height: 70 }, base);
+  const st = txt(base, 448, 47, "Student policy", "pt k-stu"); const st2 = el("tspan", { class: "ps" }, st); st2.textContent = " (trainable)";
+  el("rect", { x: 842, y: 12, width: 346, height: 362, rx: 16, class: "pn tea" }, base);
+  el("path", { d: "M842,28 a16,16 0 0 1 16,-16 h314 a16,16 0 0 1 16,16 v40 h-346 z", class: "pnh tea" }, base);
+  el("image", { href: "assets/teacher.png", x: 844, y: -2, width: 72, height: 72 }, base);
+  const tt = txt(base, 920, 47, "Teacher policy", "pt k-tea"); const tt2 = el("tspan", { class: "ps" }, tt); tt2.textContent = " (frozen)";
+  el("rect", { x: 372, y: 388, width: 816, height: 82, rx: 14, class: "pn obj" }, base);
+  /* source selection */
+  let g = part("oDocs");
+  txt(g, 34, 96, "Single-turn tasks", "o-l");
+  [[106, "Original", "S_{orig}"], [160, "Revised task", "S_{Dir}"]].forEach(([y, name, m]) => {
+    box(g, 32, y, 278, 46, "src"); ic(g, "doc", 46, y + 10, 18, 26, "ic-src");
+    txt(g, 76, y + 28, name, "o-h"); math(g, 292, y + 29, m, "o-m", "end");
+  });
+  ar(part("oA1"), "M171,208 V228");
+  g = part("oTV"); box(g, 32, 230, 278, 42, "src"); ic(g, "mag", 58, 239, 24, 24, "ic-src"); txt(g, 171, 256, "Teacher + verifier", "o-h", "middle");
+  ar(part("oA2"), "M171,274 V302");
+  g = part("oOK"); S.ok = g;
+  ic(g, "check", 116, 277, 24, 24, "ic-ok"); el("rect", { x: 184, y: 276, width: 112, height: 26, rx: 8, class: "chip-ok" }, g); txt(g, 240, 294, "Both correct", "t-ok", "middle");
+  g = part("oMatch"); S.match = g;
+  box(g, 32, 314, 278, 142, "src"); txt(g, 171, 340, "Single-/multi-turn matching", "o-h", "middle");
+  S.mrow = [el("rect", { x: 42, y: 354, width: 258, height: 40, rx: 8, class: "mrow" }, g), el("rect", { x: 42, y: 402, width: 258, height: 40, rx: 8, class: "mrow" }, g)];
+  S.mrowG = [el("g", {}, g), el("g", {}, g)];
+  math(S.mrowG[0], 56, 380, "S_{orig}"); el("path", { d: "M106,375 H140", class: "ar2", "marker-end": "url(#ahS)", "marker-start": "url(#ahS)" }, S.mrowG[0]); math(S.mrowG[0], 150, 380, "M_{Orig}, M_{Neu}, M_{Ret}", "o-m");
+  math(S.mrowG[1], 56, 428, "S_{Dir}"); el("path", { d: "M106,423 H140", class: "ar2", "marker-end": "url(#ahS)", "marker-start": "url(#ahS)" }, S.mrowG[1]); math(S.mrowG[1], 150, 428, "M_{Rev}", "o-m");
+  /* student */
+  g = part("sHv"); box(g, 392, 80, 290, 60, "stu"); ic(g, "chat", 406, 94, 28, 26, "ic-stu");
+  txt(g, 548, 104, "Multi-turn dialogue", "o-h", "middle"); math(g, 668, 104, "H_{v}", "o-m", "end");
+  S.hv = txt(g, 548, 127, "", "o-s", "middle");
+  ar(part("sA1"), "M537,142 V158");
+  g = part("sPol"); box(g, 392, 160, 290, 54, "stu"); S.fire = ic(g, "fire", 414, 172, 24, 26, "ic-fire");
+  txt(g, 552, 183, "Student policy", "o-h", "middle"); math(g, 552, 205, "π_{θ}(· | H_{v})", "o-m", "middle");
+  ar(part("sA2"), "M537,216 V232");
+  g = part("sSmp"); box(g, 392, 234, 290, 58, "stu"); txt(g, 537, 255, "On-policy sample", "o-h", "middle");
+  S.smp = el("text", { x: 537, y: 280, class: "o-tok", "text-anchor": "middle" }, g);
+  ar(part("sA3"), "M537,294 V306");
+  g = part("sP"); math(g, 404, 344, "P^{S}", "o-P k-stu");
+  S.bS = OP.cand.map((c, k) => { const r = el("rect", { x: 468 + k * 30, y: 352, width: 20, height: 0, rx: 2, class: "bS" }, g); txt(g, 478 + k * 30, 366, c, "o-mini", "middle"); return r; });
+  txt(g, 596, 350, "…", "o-l");
+  /* teacher */
+  g = part("tCv"); box(g, 862, 80, 306, 60, "tea"); ic(g, "doc", 878, 93, 18, 26, "ic-tea");
+  txt(g, 1024, 104, "Single-turn task", "o-h", "middle"); math(g, 1152, 104, "c_{v}", "o-m", "end");
+  S.cv = el("text", { x: 1024, y: 127, class: "o-s", "text-anchor": "middle" }, g);
+  ar(part("tA1"), "M1015,142 V158");
+  g = part("tPol"); box(g, 862, 160, 306, 54, "tea"); S.snow = ic(g, "snow", 886, 175, 24, 24, "ic-snow");
+  txt(g, 1028, 183, "Teacher policy", "o-h", "middle"); math(g, 1028, 205, "T_{0}(· | c_{v})", "o-m", "middle");
+  ar(part("tA2"), "M1015,216 V232");
+  g = part("tEval"); box(g, 862, 234, 306, 58, "tea"); txt(g, 1015, 255, "Teacher evaluation on shared prefix", "o-h", "middle");
+  math(g, 1015, 280, "T_{0}(· | c_{v}, ŷ_{v,<t})", "o-m", "middle");
+  ar(part("tA3"), "M1015,294 V306");
+  g = part("tP"); math(g, 878, 344, "P^{T}", "o-P k-tea");
+  S.bT = OP.cand.map((c, k) => { const r = el("rect", { x: 940 + k * 30, y: 352, width: 20, height: 0, rx: 2, class: "bT" }, g); txt(g, 950 + k * 30, 366, c, "o-mini", "middle"); return r; });
+  txt(g, 1068, 350, "…", "o-l");
+  /* between */
+  g = part("pair"); S.pair = el("path", { d: "M684,116 H840", class: "dash2", "marker-end": "url(#ah)", "marker-start": "url(#ah)" }, g);
+  txt(g, 762, 90, "Intent-aligned", "o-l", "middle"); txt(g, 762, 104, "input pair", "o-l", "middle");
+  g = part("pref"); ar(g, "M684,264 H858", "arb", "ahB");
+  txt(g, 771, 252, "Shared answer prefix", "o-s k-brown", "middle"); math(g, 771, 290, "ŷ_{v,<t}", "o-m", "middle");
+  /* objective */
+  g = part("objT"); ic(g, "target", 398, 410, 30, 30, "ic-obj"); txt(g, 436, 431, "Training objective", "o-h k-obj");
+  txt(g, 1176, 458, "Intent-OPSD", "o-word", "end");
+  ar(part("lnS"), "M620,356 V378 H700 V394");
+  ar(part("lnT"), "M1100,356 V378 H880 V394");
+  g = part("loss"); S.loss = box(g, 662, 398, 254, 58, "obj");
+  const lt = txt(g, 789, 421, "Loss ", "o-h", "middle"); const li = el("tspan", { class: "o-m" }, lt); li.textContent = "ℒ"; const lr = el("tspan", {}, lt); lr.textContent = ": token-level JS";
+  txt(g, 789, 443, "(mean over 4 conditions)", "o-s", "middle");
+  S.cdots = ["orig", "neu", "ret", "rev"].map((c, i) => el("circle", { cx: 940 + i * 16, cy: 427, r: 5.5, class: "cdot", "data-c": c }, g));
+  S.js = txt(g, 1008, 432, "", "o-tok");
+  g = part("upd"); S.upd = el("path", { d: "M662,446 H384 V188 H390", class: "dashp", "marker-end": "url(#ahP)" }, g);
+  txt(g, 520, 463, "Update student only", "o-s k-obj", "middle");
+})();
+
+function setV(v) {
+  OP.v = v; const c = OP.view[v];
+  S.hv.textContent = OP.hv[v];
+  S.hv.style.fill = v === "ret" ? "var(--red-ink)" : v === "rev" ? "var(--green-ink)" : "";
+  fillMath(S.cv, OP.cv[c]);
+  S.mrow.forEach((r, i) => r.classList.toggle("on", i === c));
+  $$("#vSel button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+}
+function setTokens(n) {
+  const t = S.smp, v = OP.v;
+  while (t.firstChild) t.removeChild(t.firstChild);
+  const a = el("tspan", {}, t); a.textContent = n > 0 ? "ŷ = " : "";
+  OP.tok[v].forEach((tk, i) => {
+    const s = el("tspan", {}, t); s.textContent = (i ? " " : "") + tk;
+    if (i === 0) s.setAttribute("class", v === "ret" ? "hot" : "okv");
+    if (i >= n) s.setAttribute("fill-opacity", "0");
+  });
+}
+function drawBars(which, p) {
+  const arr = which === "S" ? S.bS : S.bT, dist = which === "S" ? OP.pS[OP.v] : OP.pT[OP.v];
+  arr.forEach((r, k) => { const h = dist[k] * 44 * p; r.setAttribute("height", h.toFixed(1)); r.setAttribute("y", (352 - h).toFixed(1)); });
+}
+function setLoss(p, ndots) {
+  S.js.textContent = p > 0 ? `JS = ${(js2(OP.pS[OP.v], OP.pT[OP.v]) * p).toFixed(2)}` : "";
+  S.cdots.forEach((d, i) => { const on = i < ndots; d.style.fill = on ? `var(--${{ orig: "accent", neu: "neu", ret: "red", rev: "green" }[d.dataset.c]})` : ""; d.style.stroke = on ? "transparent" : ""; });
+}
+const RESET = [null,
+  () => { S.ok.classList.add("hid"); S.mrowG.forEach(g => g.classList.add("hid")); S.mrow.forEach(r => r.classList.remove("on")); },
+  () => { S.hv.textContent = ""; fillMath(S.cv, ""); S.mrow.forEach(r => r.classList.remove("on")); S.pair.classList.remove("flow"); },
+  () => { setTokens(0); drawBars("S", 0); },
+  () => { drawBars("T", 0); },
+  () => { setLoss(0, 0); S.upd.classList.remove("flow"); }
+];
+const FINAL = [null,
+  () => { S.ok.classList.remove("hid"); S.mrowG.forEach(g => g.classList.remove("hid")); },
+  () => { setV(OP.v); S.pair.classList.remove("flow"); },
+  () => { setTokens(7); drawBars("S", 1); },
+  () => { drawBars("T", 1); },
+  () => { setLoss(1, 4); S.upd.classList.remove("flow"); }
+];
+const FOCUS = [null,
+  ["oDocs", "oA1", "oTV", "oA2", "oOK", "oMatch"],
+  ["oMatch", "sHv", "tCv", "pair"],
+  ["sHv", "sA1", "sPol", "sA2", "sSmp", "sA3", "sP"],
+  ["sSmp", "pref", "tCv", "tA1", "tPol", "tA2", "tEval", "tA3", "tP"],
+  ["sP", "tP", "lnS", "lnT", "loss", "upd", "objT", "sPol", "tPol"]
+];
+const CAPS = {
+  0: ["Intent-OPSD", () => "The frozen Teacher sees the active task; the Student sees the dialogue. Press play to walk through one training step."],
+  1: ["Source selection", () => "The frozen Teacher must solve both S<sub>orig</sub> and S<sub>Dir</sub>. Each multi-turn condition is then paired with the single-turn task that has the same active requirements."],
+  2: ["Intent-aligned input pair", v => "The Student receives the dialogue H<sub>v</sub>; the Teacher receives c<sub>v</sub>. " + (v === "ret" ? "After a rejection, c<sub>v</sub> stays S<sub>orig</sub>." : v === "rev" ? "After an acceptance, c<sub>v</sub> switches to S<sub>Dir</sub>." : "Nothing was changed, so c<sub>v</sub> is S<sub>orig</sub>.")],
+  3: ["On-policy sample", () => "The Student answers from the full dialogue. Its own sample ŷ<sub>v</sub> is what both models score."],
+  4: ["Teacher evaluation on the shared prefix", v => v === "ret" ? "Where the Student wrote “2”, the Teacher, which sees 4 bags, puts its mass on “4”." : v === "rev" ? "The Teacher sees 2 bags and agrees with the Student's “2”." : "The Teacher sees 4 bags and agrees with the Student's “4”."],
+  5: ["Token-level JS, Student update only", () => "The JS gap between P<sup>S</sup> and P<sup>T</sup>, averaged over the four conditions, updates only the Student. At inference the Student needs neither the Teacher nor the single-turn task."]
+};
+
+const aliveOp = id => id === OP.run;
+const ease = p => p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+function tween(id, dur, fn) {
+  return new Promise(res => {
+    if (RM || dur <= 0) { fn(1); res(); return; }
+    const t0 = performance.now();
+    const tick = now => { if (!aliveOp(id)) { res(); return; } const p = Math.min(1, (now - t0) / dur); fn(ease(p)); if (p < 1) requestAnimationFrame(tick); else res(); };
+    requestAnimationFrame(tick);
+  });
+}
+const wait = (id, ms) => new Promise(res => setTimeout(res, aliveOp(id) && !RM ? ms : 0));
+function along(pts, t) {
+  const seg = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); L += d; }
+  let r = t * L;
+  for (let i = 0; i < seg.length; i++) {
+    if (r <= seg[i] || i === seg.length - 1) { const f = seg[i] ? Math.min(1, r / seg[i]) : 1; return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f]; }
+    r -= seg[i];
+  }
+  return pts[pts.length - 1];
+}
+async function travel(id, pts, cls, dur = 650) {
+  if (RM) return;
+  const c = el("circle", { r: 7, class: "tok " + cls, cx: pts[0][0], cy: pts[0][1] }, $("#fx"));
+  await tween(id, dur, p => { const [x, y] = along(pts, p); c.setAttribute("cx", x); c.setAttribute("cy", y); });
+  c.remove();
+}
+const ANIM = [null,
+  async id => {
+    await wait(id, 300);
+    await Promise.all([travel(id, [[300, 129], [300, 250]], "k-lav", 700), travel(id, [[280, 183], [280, 250]], "k-lav", 600)]); if (!aliveOp(id)) return;
+    restart($("#oTV rect"), "bump"); await wait(id, 500); if (!aliveOp(id)) return;
+    S.ok.classList.remove("hid"); restart(S.ok, "appear"); await wait(id, 700); if (!aliveOp(id)) return;
+    S.mrowG[0].classList.remove("hid"); restart(S.mrowG[0], "appear"); await wait(id, 450);
+    S.mrowG[1].classList.remove("hid"); restart(S.mrowG[1], "appear"); await wait(id, 1100);
+  },
+  async id => {
+    await wait(id, 300);
+    const c = OP.view[OP.v];
+    S.mrow[c].classList.add("on"); restart(S.mrow[c], "bump"); await wait(id, 500); if (!aliveOp(id)) return;
+    S.hv.textContent = OP.hv[OP.v]; S.hv.style.fill = OP.v === "ret" ? "var(--red-ink)" : OP.v === "rev" ? "var(--green-ink)" : ""; restart(S.hv, "appear");
+    S.pair.classList.add("flow");
+    await Promise.all([travel(id, [[688, 116], [836, 116]], "k-sand", 700), travel(id, [[836, 116], [688, 116]], "k-steel", 700)]); if (!aliveOp(id)) return;
+    fillMath(S.cv, OP.cv[c]); restart(S.cv, "appear");
+    await wait(id, 1400);
+    S.pair.classList.remove("flow");
+  },
+  async id => {
+    await wait(id, 300);
+    await travel(id, [[537, 140], [537, 162]], "k-sand", 350); if (!aliveOp(id)) return;
+    restart(S.fire, "pulse"); await wait(id, 500);
+    await travel(id, [[537, 214], [537, 236]], "k-sand", 350); if (!aliveOp(id)) return;
+    for (let t = 1; t <= 7; t++) { setTokens(t); await wait(id, 110); if (!aliveOp(id)) return; }
+    await travel(id, [[537, 292], [537, 310]], "k-sand", 300); if (!aliveOp(id)) return;
+    await tween(id, 900, p => drawBars("S", p)); await wait(id, 1000);
+  },
+  async id => {
+    await wait(id, 300);
+    await travel(id, [[686, 264], [856, 264]], "k-sand", 900); if (!aliveOp(id)) return;
+    restart($("#tEval rect"), "bump");
+    await travel(id, [[1015, 140], [1015, 162]], "k-steel", 350); if (!aliveOp(id)) return;
+    await travel(id, [[1015, 214], [1015, 236]], "k-steel", 350); if (!aliveOp(id)) return;
+    await travel(id, [[1015, 292], [1015, 310]], "k-steel", 300); if (!aliveOp(id)) return;
+    await tween(id, 900, p => drawBars("T", p)); await wait(id, 1500);
+  },
+  async id => {
+    await wait(id, 300);
+    await Promise.all([travel(id, [[620, 356], [620, 378], [700, 378], [700, 396]], "k-sand", 800), travel(id, [[1100, 356], [1100, 378], [880, 378], [880, 396]], "k-steel", 800)]); if (!aliveOp(id)) return;
+    restart(S.loss, "bump");
+    await tween(id, 600, p => setLoss(p, 0)); if (!aliveOp(id)) return;
+    for (let i = 1; i <= 4; i++) { setLoss(1, i); restart(S.cdots[i - 1], "appear"); await wait(id, 220); if (!aliveOp(id)) return; }
+    S.upd.classList.add("flow");
+    await travel(id, [[662, 446], [384, 446], [384, 188], [392, 188]], "k-pink", 1300); if (!aliveOp(id)) return;
+    restart(S.fire, "pulse"); restart(S.snow, "frost");
+    await wait(id, 1400);
+    S.upd.classList.remove("flow");
+  }
+];
+function updateOpUI() {
+  $$("#opSteps button").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.s === OP.step)));
+  const svg = $("#opsd");
+  svg.classList.toggle("focus", OP.step > 0);
+  $$("#opsd .part").forEach(p => p.classList.toggle("on", OP.step > 0 && FOCUS[OP.step].includes(p.id)));
+  const [t, f] = CAPS[OP.step];
+  $("#capTitle").textContent = t;
+  $("#capText").innerHTML = f(OP.v);
+  $("#opPlay").innerHTML = OP.playing
+    ? '<svg viewBox="0 0 14 14" aria-hidden="true"><rect x="3" y="2.5" width="2.8" height="9" rx=".8" fill="currentColor"/><rect x="8.2" y="2.5" width="2.8" height="9" rx=".8" fill="currentColor"/></svg>'
+    : '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M4 2.2v9.6l8-4.8z" fill="currentColor"/></svg>';
+  $("#opPlay").setAttribute("aria-label", OP.playing ? "Pause" : "Play");
+}
+async function goTo(n, auto) {
+  const id = ++OP.run;
+  OP.step = n; OP.playing = !!auto;
+  $("#fx").innerHTML = "";
+  for (let i = 1; i < n; i++) FINAL[i]();
+  for (let i = n; i <= 5; i++) RESET[i]();
+  updateOpUI();
+  try { await ANIM[n](id); } catch (e) { /* keep the stage usable */ }
+  if (!aliveOp(id)) return;
+  FINAL[n]();
+  if (auto && n < 5) goTo(n + 1, true);
+  else { OP.playing = false; updateOpUI(); }
+}
+function showAll() { ++OP.run; OP.step = 0; OP.playing = false; $("#fx").innerHTML = ""; for (let i = 1; i <= 5; i++) FINAL[i](); updateOpUI(); }
+$("#opPlay").addEventListener("click", () => {
+  if (OP.playing) { ++OP.run; OP.playing = false; $("#fx").innerHTML = ""; for (let i = 1; i <= OP.step; i++) FINAL[i](); updateOpUI(); }
+  else goTo(OP.step === 0 || OP.step === 5 ? 1 : OP.step, true);
+});
+$("#opPrev").addEventListener("click", () => goTo(Math.max(1, OP.step - 1), false));
+$("#opNext").addEventListener("click", () => goTo(Math.min(5, OP.step + 1), false));
+$("#opSteps").addEventListener("click", e => { const b = e.target.closest("button"); if (b) goTo(+b.dataset.s, false); });
+$("#vSel").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  setV(b.dataset.v);
+  if (OP.step === 0) showAll(); else goTo(Math.max(2, OP.step), false);
+});
+setV("ret"); showAll();
+if (!RM) onceVisible($("#opsdStage"), () => { if (OP.run <= 1 && !OP.playing) goTo(1, true); });
+
+/* ---------- results tables ---------- */
+const DOMN = { Math: "Math", Code: "Code", DB: "Database", Actions: "Actions" };
+function shade(d, base) {
+  if (Math.abs(d) < 0.005) return "";
+  const a = Math.round(Math.min(Math.abs(d) / base, 1) * 34) + 4;
+  return `background:color-mix(in oklab,var(--${d < 0 ? "red" : "green"}) ${a}%,var(--bg))`;
+}
+function renderT1() {
+  const cols = ["Original", "Direct Rev.", "Revised", "Retained", "Original", "Neutral", "Revised", "Retained"];
+  let h = `<thead><tr class="top"><th></th><th></th><th colspan="4">Single-turn</th><th colspan="4" class="split">Multi-turn</th></tr><tr><th style="text-align:left">Model</th><th style="text-align:left">Domain</th>${cols.map((c, i) => `<th class="${i === 4 ? "split" : ""}">${c}</th>`).join("")}</tr></thead><tbody>`;
+  const cell = (vals, j) => `<td class="cell${j === 4 ? " split" : ""}" style="${j > 0 && vals[j] < vals[0] ? shade(vals[j] - vals[0], 60) : ""}">${fmt(vals[j])}</td>`;
+  Object.entries(T1).forEach(([m, doms]) => {
+    const ks = Object.keys(doms);
+    ks.forEach((d, ri) => { h += `<tr class="${ri === ks.length - 1 ? "grp-end" : ""}">${ri === 0 ? `<td class="m" rowspan="${ks.length}">${m}</td>` : ""}<td class="d">${DOMN[d]}</td>${doms[d].map((_, j) => cell(doms[d], j)).join("")}</tr>`; });
+  });
+  h += `<tr class="sum"><td colspan="2" style="text-align:left">Eight-model overall</td>${T1_OVERALL.map((_, j) => cell(T1_OVERALL, j)).join("")}</tr></tbody>`;
+  $("#heat").innerHTML = h;
+  $("#tblNote").innerHTML = "Accuracy (%). Direct Rev. states the revised task directly; Revised includes the proposal and acceptance. Shading marks the drop from the same row's single-turn Original. Overall pools all 414 sources across the eight models.";
+}
+function renderT2() {
+  const cols = ["Orig.", "Neut.", "Revised", "Retained"];
+  let h = `<thead><tr class="top"><th></th><th></th><th colspan="4">Base</th><th colspan="4" class="split">SFT</th><th colspan="4" class="split">Intent-OPSD</th></tr><tr><th style="text-align:left">Model</th><th style="text-align:left">Domain</th>${[0, 1, 2].map(g => cols.map((c, i) => `<th class="${i === 0 && g ? "split" : ""}">${c}</th>`).join("")).join("")}</tr></thead><tbody>`;
+  const cells = (trip, fmtNum) => trip.map((vals, g) => vals.map((v, j) => `<td class="cell${j === 0 && g ? " split" : ""}" style="${g ? shade(v - trip[0][j], 30) : ""}">${fmtNum(v)}</td>`).join("")).join("");
+  Object.entries(T2).forEach(([m, doms]) => {
+    const ks = Object.keys(doms);
+    ks.forEach((d, ri) => { h += `<tr class="${ri === ks.length - 1 ? "grp-end" : ""}">${ri === 0 ? `<td class="m" rowspan="${ks.length}">${m}</td>` : ""}<td class="d">${DOMN[d]}</td>${cells(doms[d], v => fmt(v))}</tr>`; });
+  });
+  h += `<tr class="sum"><td colspan="2" style="text-align:left">Mean</td>${cells(T2_MEAN, v => fmt(v))}</tr>`;
+  h += `<tr class="sum2"><td colspan="2" style="text-align:left">Overall avg.</td>${T2_OVERALL.map((v, g) => `<td colspan="4" class="cell span${g ? " split" : ""}" style="${g ? shade(v - T2_OVERALL[0], 30) : ""}">${fmt(v)}</td>`).join("")}</tr>`;
+  h += `<tr><td colspan="2" style="text-align:left;color:var(--ink-2)">Depth gain vs. Base</td>${T2_DEPTH.base.map((v, i) => `<td colspan="3" class="cell span${i ? "" : " split"}">k=${i + 1}: ${sgn(v)}</td>`).join("")}</tr>`;
+  h += `<tr><td colspan="2" style="text-align:left;color:var(--ink-2)">Depth gain vs. SFT</td>${T2_DEPTH.sft.map((v, i) => `<td colspan="3" class="cell span${i ? "" : " split"}">k=${i + 1}: ${sgn(v)}</td>`).join("")}</tr></tbody>`;
+  $("#heat2").innerHTML = h;
+  $("#tblNote2").innerHTML = "Accuracy (%) with conditions and model–domain pairs weighted equally. SFT and Intent-OPSD cells are shaded by their change from Base (red lower, green higher). Depth gains (pp) use overall accuracy across the four interaction paths; k counts added event blocks.";
+}
+renderT1();
+renderT2();
+
+/* ---------- BibTeX copy ---------- */
+$("#copyBib").addEventListener("click", () => {
+  const btn = $("#copyBib");
+  const done = () => { btn.textContent = "Copied"; setTimeout(() => (btn.textContent = "Copy"), 1600); };
+  const fallback = () => { const r = document.createRange(); r.selectNodeContents($("#bibtex")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Press Ctrl+C"; setTimeout(() => (btn.textContent = "Copy"), 2400); };
+  try { navigator.clipboard.writeText($("#bibtex").textContent).then(done, fallback); } catch (e) { fallback(); }
+});
+</script>
+
+</body>
+</html>
