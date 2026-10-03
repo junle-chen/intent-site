@@ -92,7 +92,7 @@ button{font:inherit;color:inherit}
 
 /* type */
 h1,h2,.big{font-family:var(--serif);font-weight:400;letter-spacing:-.02em}
-h1{font-size:clamp(2.7rem,5.6vw,4.7rem);line-height:1;margin:1.25rem 0 0;text-wrap:balance}
+h1{font-size:clamp(2.8rem,6vw,5.2rem);line-height:1;margin:1.25rem 0 0;text-wrap:balance}
 h1 em{font-style:italic;color:var(--red)}
 h2{font-size:clamp(2rem,3.8vw,3rem);line-height:1.06;margin:.6rem 0 0;text-wrap:balance}
 h3{font-family:var(--sans);font-weight:500;font-size:1.2rem;line-height:1.35;letter-spacing:-.01em;margin:0;text-wrap:balance}
@@ -132,10 +132,13 @@ details summary:hover{color:var(--ink)}
 .plate img{display:block;width:100%;height:auto}
 
 /* hero */
-.hero{display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:clamp(2.5rem,6vw,5rem);align-items:center;padding-block:clamp(3.5rem,9vw,7rem) clamp(4rem,9vw,7rem)}
+.hero{padding-block:clamp(3rem,7vw,5.5rem) clamp(4rem,8vw,6.5rem)}
+.hero-top{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:clamp(1.5rem,5vw,4.5rem);align-items:end;margin-bottom:clamp(2rem,4.5vw,3.25rem)}
+.hero-side .subtitle{margin-top:0}
+.hero-side .links{margin-top:1.5rem}
 
 .hero-video{margin:0;min-width:0}
-.hero-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:20px;background:#0b0d11;box-shadow:0 1px 2px rgba(14,17,22,.08),0 28px 56px -28px rgba(14,17,22,.45)}
+.hero-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;border-radius:24px;background:#0b0d11;box-shadow:0 1px 2px rgba(14,17,22,.08),0 28px 56px -28px rgba(14,17,22,.45)}
 .hero-video figcaption{font-size:.84rem;color:var(--muted);margin-top:.8rem}
 /* chat */
 .chat-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-bottom:1.1rem}
@@ -407,7 +410,7 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
   .steps4{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:900px){
-  .hero,.setup,.finding,.rq4{grid-template-columns:minmax(0,1fr)}
+  .hero-top,.setup,.finding,.rq4{grid-template-columns:minmax(0,1fr)}
   .readout{flex-direction:row;flex-wrap:wrap;gap:1.5rem 3rem}
   .model-line{flex-basis:100%}
 }
@@ -443,12 +446,16 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
 <main class="wrap" id="top">
   <!-- ================= HERO ================= -->
   <section class="hero">
-    <div>
-      <p class="kicker">ICLR 2027 submission · Anonymous authors</p>
-      <h1>You changed your mind. <em>The model didn't.</em></h1>
-      <p class="subtitle">Demystifying intent in multi-turn dialogue</p>
-      <p class="lead">Language models keep acting on what was said, even after the user rejected or replaced it.</p>
-      <div class="links" id="links"></div>
+    <div class="hero-top">
+      <div>
+        <p class="kicker">ICLR 2027 submission · Anonymous authors</p>
+        <h1>You changed your mind. <em>The model didn't.</em></h1>
+      </div>
+      <div class="hero-side">
+        <p class="subtitle">Demystifying intent in multi-turn dialogue</p>
+        <p class="lead">Language models keep acting on what was said, even after the user rejected or replaced it.</p>
+        <div class="links" id="links"></div>
+      </div>
     </div>
 
     <figure class="hero-video">
