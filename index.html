@@ -92,11 +92,16 @@ button{font:inherit;color:inherit}
 
 /* type */
 h1,h2,.big{font-family:var(--serif);font-weight:400;letter-spacing:-.02em}
-h1{font-size:clamp(2.8rem,6vw,5.2rem);line-height:1;margin:1.25rem 0 0;text-wrap:balance}
+h1{font-size:clamp(2.8rem,6vw,5.2rem);line-height:1;margin:0;text-wrap:balance}
 h1 em{font-style:italic;color:var(--red)}
 h2{font-size:clamp(2rem,3.8vw,3rem);line-height:1.06;margin:.6rem 0 0;text-wrap:balance}
 h3{font-family:var(--sans);font-weight:500;font-size:1.2rem;line-height:1.35;letter-spacing:-.01em;margin:0;text-wrap:balance}
 .kicker,.label{font-size:.88rem;color:var(--muted)}
+.authors{margin-top:1.75rem;font-size:1.02rem;line-height:1.7;color:var(--ink);max-width:40rem}
+.authors sup,.affil sup{font-size:.66em;color:var(--muted);margin-left:1px;vertical-align:super;line-height:0}
+.authors .corr{font-size:.72em;color:var(--muted);margin-left:2px;vertical-align:super;line-height:0}
+.authors .au{white-space:nowrap}
+.affil{font-size:.92rem;color:var(--muted);margin-top:.35rem}
 .subtitle{font-family:var(--serif);font-style:italic;font-size:1.35rem;color:var(--ink-2);margin-top:.9rem}
 .lead{font-size:1.15rem;line-height:1.5;color:var(--ink-2);max-width:36ch;margin-top:1.25rem}
 .sub{font-size:1.06rem;color:var(--ink-2);max-width:58ch;margin-top:1rem}
@@ -448,8 +453,9 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
   <section class="hero">
     <div class="hero-top">
       <div>
-        <p class="kicker">ICLR 2027 submission · Anonymous authors</p>
         <h1>You changed your mind. <em>The model didn't.</em></h1>
+        <p class="authors"><span class="au">Junle Chen<sup>1</sup></span>, <span class="au">Wei Chen<sup>1,2</sup><span class="corr" role="img" aria-label="corresponding author">✉</span></span>, <span class="au">Zhengjun Huang<sup>1</sup></span>, <span class="au">Zhoujin Tian<sup>1</sup></span>, <span class="au">Yuxuan Liu<sup>1</sup></span>, <span class="au">Kai Wang<sup>2</sup></span>, <span class="au">Rui Chen<sup>2</sup></span>, <span class="au">Xiaofang Zhou<sup>1</sup></span></p>
+        <p class="affil"><sup>1</sup>HKUST&ensp;·&ensp;<sup>2</sup>Tencent Hy</p>
       </div>
       <div class="hero-side">
         <p class="subtitle">Demystifying intent in multi-turn dialogue</p>
@@ -695,14 +701,14 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
   <section class="block" id="cite">
     <div class="sec"><p class="label">Cite</p><h2>BibTeX</h2></div>
     <div class="bib">
-      <pre id="bibtex">@inproceedings{anonymous2027changed,
-  title     = {You Changed Your Mind, The Model Didn't:
-               Demystifying Intent in Multi-Turn Dialogue},
-  author    = {Anonymous},
-  booktitle = {Submitted to the Fifteenth International Conference
-               on Learning Representations},
-  year      = {2027},
-  note      = {Under review}
+      <pre id="bibtex">@misc{chen2026changed,
+  title  = {You Changed Your Mind, The Model Didn't:
+            Demystifying Intent in Multi-Turn Dialogue},
+  author = {Chen, Junle and Chen, Wei and Huang, Zhengjun and
+            Tian, Zhoujin and Liu, Yuxuan and Wang, Kai and
+            Chen, Rui and Zhou, Xiaofang},
+  year   = {2026},
+  url    = {https://junle-chen.github.io/intent-site/}
 }</pre>
       <button type="button" class="btn" id="copyBib">Copy</button>
     </div>
@@ -711,8 +717,8 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
 
 <footer>
   <div class="wrap">
-    <span>Builds on <a href="https://openreview.net/forum?id=VKGTGGcwl6" target="_blank" rel="noopener">LLMs Get Lost in Multi-Turn Conversation</a> (Laban et al., ICLR 2026).</span>
-    <span>Numbers from the paper's tables and figures.</span>
+    <span>Correspondence: <a href="mailto:jchenkg@connect.ust.hk">jchenkg@connect.ust.hk</a>, <a href="mailto:onedeanxxx@gmail.com">onedeanxxx@gmail.com</a></span>
+    <span>HKUST · Tencent Hy</span>
   </div>
 </footer>
 
@@ -720,7 +726,7 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
 
 <script>
 /* Links. Empty strings show "soon". */
-const LINKS = { paper: "", code: "https://anonymous.4open.science/r/intent-DEC2/" };
+const LINKS = { paper: "", code: "https://github.com/junle-chen/intent" };
 
 const T1 = {"Qwen3.6-27B":{"Math":[98.06,97.09,87.38,93.2,73.79,71.84,66.99,61.17],"Code":[95,93,90,88,81,76,80,72],"DB":[92.52,91.59,91.59,87.85,42.99,43.93,42.06,38.32],"Actions":[96.15,95.19,96.15,85.58,49.04,44.23,47.12,48.08]},"Qwen3-8B":{"Math":[92.23,90.29,75.73,67.96,64.08,64.08,54.37,37.86],"Code":[73,75,42,71,41,43,43,26],"DB":[85.98,85.05,74.77,50.47,38.32,26.17,32.71,17.76],"Actions":[97.12,96.15,83.65,85.58,51.92,50.0,46.15,39.42]},"Llama-3.1-8B":{"Math":[75.73,72.82,62.14,64.08,33.98,29.13,22.33,17.48],"Code":[45,47,43,24,25,21,16,10],"DB":[79.44,78.5,76.64,43.93,22.43,24.3,16.82,19.63],"Actions":[93.27,93.27,72.12,80.77,55.77,52.88,48.08,48.08]},"Gemma-4-26B-A4B":{"Math":[97.09,98.06,87.38,92.23,69.9,65.05,66.02,58.25],"Code":[92,91,71,89,76,54,68,59],"DB":[93.46,90.65,88.79,91.59,42.06,44.86,42.06,35.51],"Actions":[98.08,98.08,92.31,92.31,40.38,31.73,36.54,28.85]},"GPT-5.6-Luna":{"Math":[95.15,96.12,90.29,84.47,76.7,73.79,64.08,62.14],"Code":[96,92,93,83,93,92,93,85],"DB":[94.39,93.46,93.46,90.65,42.99,39.25,48.6,36.45],"Actions":[86.54,86.54,91.35,88.46,41.35,40.38,34.62,33.65]},"Gemini-3.7-Flash":{"Math":[97.09,99.03,92.23,95.15,72.82,66.99,61.17,67.96],"Code":[99,95,83,99,99,68,44,94],"DB":[99.07,99.07,95.33,98.13,42.06,43.93,38.32,36.45],"Actions":[98.08,98.08,99.04,98.08,37.5,32.69,39.42,41.35]},"DeepSeek-V4-Flash-0731":{"Math":[98.06,97.09,94.17,93.2,56.31,57.28,54.37,54.37],"Code":[98,99,100,97,95,90,86,93],"DB":[92.52,93.46,86.92,92.52,36.45,41.12,31.78,35.51],"Actions":[94.23,93.27,94.23,94.23,37.5,34.62,30.77,33.65]},"Claude-Sonnet-5":{"Math":[95.15,92.23,87.38,89.32,65.05,67.96,68.93,65.05],"Code":[97,92,97,96,88,58,88,81],"DB":[94.39,93.46,93.46,92.52,42.06,45.79,41.12,34.58],"Actions":[95.19,93.27,95.19,95.19,50.96,45.19,51.92,53.85]}};
 const T1_OVERALL = [91.73, 90.85, 85.11, 84.21, 55.43, 51.00, 49.88, 47.37];
