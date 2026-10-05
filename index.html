@@ -27,7 +27,7 @@
   --o-stu-h:#f9e5c9; --o-stu-b:#fdf8f1; --o-stu-bd:#e8cc9e; --o-stu-ink:#9a5a0c; --o-stu-box:#fbefdd; --o-ps:#c69a4c;
   --o-tea-h:#d9e7f3; --o-tea-b:#f3f8fb; --o-tea-bd:#a9c3db; --o-tea-ink:#2d5d8c; --o-tea-box:#e6f0f8; --o-pt:#5f87b0;
   --o-obj-bd:#e2a0a0; --o-obj-b:#fdf4f4; --o-obj-ink:#b04747; --o-obj-box:#fbe4e4; --o-brown:#a8782c;
-  --plate:#ffffff;
+  --plate:#ffffff; --logo-bg:transparent;
   --serif:"Newsreader","Iowan Old Style",Georgia,serif;
   --sans:"Geist","Helvetica Neue",Helvetica,Arial,sans-serif;
   --mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -48,7 +48,7 @@
     --o-stu-h:#3a2c17; --o-stu-b:#1c1712; --o-stu-bd:#6b5330; --o-stu-ink:#f2b86c; --o-stu-box:#2a2114; --o-ps:#d8ad66;
     --o-tea-h:#1c2b3b; --o-tea-b:#121a22; --o-tea-bd:#3d5976; --o-tea-ink:#9cc3ea; --o-tea-box:#192634; --o-pt:#86a9cf;
     --o-obj-bd:#7d4646; --o-obj-b:#1f1415; --o-obj-ink:#f0a0a0; --o-obj-box:#371e20; --o-brown:#d9a85a;
-    --plate:#f2f3f6;
+    --plate:#f2f3f6; --logo-bg:#eef0f4;
     color-scheme:dark;
   }
 }
@@ -65,7 +65,7 @@
   --o-stu-h:#3a2c17; --o-stu-b:#1c1712; --o-stu-bd:#6b5330; --o-stu-ink:#f2b86c; --o-stu-box:#2a2114; --o-ps:#d8ad66;
   --o-tea-h:#1c2b3b; --o-tea-b:#121a22; --o-tea-bd:#3d5976; --o-tea-ink:#9cc3ea; --o-tea-box:#192634; --o-pt:#86a9cf;
   --o-obj-bd:#7d4646; --o-obj-b:#1f1415; --o-obj-ink:#f0a0a0; --o-obj-box:#371e20; --o-brown:#d9a85a;
-  --plate:#f2f3f6;
+  --plate:#f2f3f6; --logo-bg:#eef0f4;
   color-scheme:dark;
 }
 
@@ -101,6 +101,10 @@ h3{font-family:var(--sans);font-weight:500;font-size:1.2rem;line-height:1.35;let
 .authors sup,.affil sup{font-size:.66em;color:var(--muted);margin-left:1px;vertical-align:super;line-height:0}
 .authors .corr{font-size:.72em;color:var(--muted);margin-left:2px;vertical-align:super;line-height:0}
 .authors .au{white-space:nowrap}
+.logos{display:inline-flex;align-items:center;gap:1.6rem;margin-top:1.1rem;padding:.5rem .8rem;margin-left:-.8rem;border-radius:12px;background:var(--logo-bg)}
+.logos img{display:block;width:auto}
+.logos img[alt="HKUST"]{height:30px}
+.logos img[alt="Tencent Hy"]{height:26px}
 .affil{font-size:.92rem;color:var(--muted);margin-top:.35rem}
 .subtitle{font-family:var(--serif);font-style:italic;font-size:1.35rem;color:var(--ink-2);margin-top:.9rem}
 .lead{font-size:1.15rem;line-height:1.5;color:var(--ink-2);max-width:36ch;margin-top:1.25rem}
@@ -456,6 +460,7 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
         <h1>You changed your mind. <em>The model didn't.</em></h1>
         <p class="authors"><span class="au">Junle Chen<sup>1</sup></span>, <span class="au">Wei Chen<sup>1,2</sup><span class="corr" role="img" aria-label="corresponding author">✉</span></span>, <span class="au">Zhengjun Huang<sup>1</sup></span>, <span class="au">Zhoujin Tian<sup>1</sup></span>, <span class="au">Yuxuan Liu<sup>1</sup></span>, <span class="au">Kai Wang<sup>2</sup></span>, <span class="au">Rui Chen<sup>2</sup></span>, <span class="au">Xiaofang Zhou<sup>1</sup></span></p>
         <p class="affil"><sup>1</sup>HKUST&ensp;·&ensp;<sup>2</sup>Tencent Hy</p>
+        <div class="logos"><img src="assets/logo_hkust.png" alt="HKUST" height="30"><img src="assets/logo_tencent.png" alt="Tencent Hy" height="26"></div>
       </div>
       <div class="hero-side">
         <p class="subtitle">Demystifying intent in multi-turn dialogue</p>
@@ -465,8 +470,8 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
     </div>
 
     <figure class="hero-video">
-      <video id="heroVideo" src="assets/storybook.mp4" poster="assets/storybook_poster.webp" autoplay muted loop playsinline controls preload="metadata" aria-label="Storybook animation of the paper: a chef, Clawd, and a rejected change"></video>
-      <figcaption>The paper as a 90-second story. Turn on sound for the narration.</figcaption>
+      <video id="heroVideo" src="assets/storybook.mp4" poster="assets/storybook_poster.webp" autoplay loop playsinline controls preload="metadata" aria-label="Storybook animation of the paper: a chef, Clawd, and a rejected change"></video>
+      <figcaption>The paper as a 90-second story, with narration.</figcaption>
     </figure>
   </section>
 
@@ -842,8 +847,17 @@ $("#links").innerHTML = (LINKS.paper ? `<a class="btn primary" href="${esc(LINKS
 /* ---------- hero video ---------- */
 (function () {
   const v = $("#heroVideo"); if (!v) return;
-  if (RM) { v.removeAttribute("autoplay"); v.pause(); }
-  else { const pr = v.play(); if (pr && pr.catch) pr.catch(() => {}); }
+  const VOL = 0.3;
+  v.volume = VOL;
+  if (RM) { v.removeAttribute("autoplay"); v.pause(); return; }
+  /* Try to start with sound; browsers that block it get a muted start and unmute on the first interaction. */
+  v.muted = false;
+  const pr = v.play();
+  if (pr && pr.catch) pr.catch(() => {
+    v.muted = true; v.play().catch(() => {});
+    const unmute = () => { v.muted = false; v.volume = VOL; ["pointerdown", "keydown", "touchstart"].forEach(t => removeEventListener(t, unmute, true)); };
+    ["pointerdown", "keydown", "touchstart"].forEach(t => addEventListener(t, unmute, true));
+  });
 })();
 
 /* ---------- setup player ---------- */
