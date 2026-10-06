@@ -94,9 +94,9 @@ button{font:inherit;color:inherit}
 .lang button:hover{color:var(--ink)}
 .lang button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 
-/* Chinese: no synthetic italics, looser display line-height */
-:root[lang="zh-CN"] h1 em,:root[lang="zh-CN"] .subtitle,:root[lang="zh-CN"] svg .hdr,:root[lang="zh-CN"] .pt .ps{font-style:normal}
-:root[lang="zh-CN"] h1,:root[lang="zh-CN"] h2{letter-spacing:0;line-height:1.18}
+/* Chinese: no synthetic italics, looser heading line-height */
+:root[lang="zh-CN"] svg .hdr,:root[lang="zh-CN"] .pt .ps{font-style:normal}
+:root[lang="zh-CN"] h2{letter-spacing:0;line-height:1.18}
 
 /* type */
 h1,h2,.big{font-family:var(--serif);font-weight:400;letter-spacing:-.02em}
@@ -469,13 +469,13 @@ footer .wrap{border-top:1px solid var(--line);padding-top:1.5rem;display:flex;fl
   <section class="hero">
     <div class="hero-top">
       <div>
-        <h1 data-zh="你改了主意，<em>模型却没有。</em>">You changed your mind. <em>The model didn't.</em></h1>
+        <h1>You changed your mind. <em>The model didn't.</em></h1>
         <p class="authors"><span class="au">Junle Chen<sup>1</sup></span>, <span class="au">Wei Chen<sup>1,2</sup><span class="corr" role="img" aria-label="corresponding author">✉</span></span>, <span class="au">Zhengjun Huang<sup>1</sup></span>, <span class="au">Zhoujin Tian<sup>1</sup></span>, <span class="au">Yuxuan Liu<sup>1</sup></span>, <span class="au">Kai Wang<sup>2</sup></span>, <span class="au">Rui Chen<sup>2</sup></span>, <span class="au">Xiaofang Zhou<sup>1</sup></span></p>
         <p class="affil"><sup>1</sup>HKUST&ensp;·&ensp;<sup>2</sup>Tencent Hy</p>
         <div class="logos"><img src="assets/logo_hkust.png" alt="HKUST" height="30"><img src="assets/logo_tencent.png" alt="Tencent Hy" height="26"></div>
       </div>
       <div class="hero-side">
-        <p class="subtitle" data-zh="揭秘多轮对话中的意图">Demystifying intent in multi-turn dialogue</p>
+        <p class="subtitle">Demystifying intent in multi-turn dialogue</p>
         <p class="lead" data-zh="即使用户已经否决或替换了先前的说法，语言模型仍会照着它去做。">Language models keep acting on what was said, even after the user rejected or replaced it.</p>
         <div class="links" id="links"></div>
       </div>
@@ -852,12 +852,10 @@ const pick = v => Array.isArray(v) ? L(v[0], v[1]) : v;
 const COND = { orig: ["Original", "原始"], neu: ["Neutral", "中性"], ret: ["Retained", "保留"], rev: ["Revised", "修订"] };
 const DOMZH = { Actions: "动作", Code: "代码", Database: "数据库", DB: "数据库", Math: "数学" };
 const dom = n => L(n === "DB" ? "Database" : n, DOMZH[n] || n);
-const TITLE = [document.title, "你改了主意，模型却没有"];
 function applyStatic() {
   $$("[data-zh]").forEach(e => { if (e.dataset.en == null) e.dataset.en = e.innerHTML; e.innerHTML = L(e.dataset.en, e.dataset.zh); });
   $$("[data-zh-label]").forEach(e => { if (e.dataset.enLabel == null) e.dataset.enLabel = e.getAttribute("aria-label"); e.setAttribute("aria-label", L(e.dataset.enLabel, e.dataset.zhLabel)); });
   document.documentElement.lang = L("en", "zh-CN");
-  document.title = pick(TITLE);
   $$("#langSwitch button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === LANG)));
 }
 const relang = [];  /* script-rendered parts register a redraw here */
